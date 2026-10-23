@@ -1,0 +1,4 @@
+package org.group6.childrenelectricvehiclerentalmanagement.Services;
+
+public class SessionService {
+}
