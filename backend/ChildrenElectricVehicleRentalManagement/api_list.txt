@@ -1,0 +1,236 @@
+DANH SÁCH API - PHẦN MỀM QUẢN LÝ CHO THUÊ XE ĐIỆN TRẺ EM
+=========================================================
+
+QUY ƯỚC CHUNG
+-------------
+- Mọi API (trừ login) đều đối chiếu cookie với DB. Thiếu hoặc lệch thì trả 401.
+- Thành công : { "ok": true, "data": {...} }
+- Lỗi        : { "ok": false, "error": { "code": "...", "message": "..." } }
+- Sai trạng thái nghiệp vụ trả 409, dữ liệu không hợp lệ trả 422.
+- Thời gian dùng UTC (ISO 8601). Tiền là số nguyên VND.
+- payment_method chỉ nhận: Cash, Bank.
+
+
+1. XÁC THỰC
+-----------
+POST   /api/auth/login
+       Input : username, password
+       Ghi chú: Sinh cookie mới, lưu bản băm vào DB, tài khoản -> Online.
+                Tài khoản Deactivate trả 403.
+
+GET    /api/auth/me
+       Ghi chú: Kiểm tra còn đăng nhập.
+
+POST   /api/settings/logout
+       Ghi chú: Tài khoản -> Offline, xóa cookie ở DB và trình duyệt.
+
+
+2. PHIÊN LÀM
+------------
+POST   /api/sessions
+       Input : date, time
+       Ghi chú: Tạo phiên trạng thái Waiting.
+
+POST   /api/sessions/start
+       Input : vehicle_slugs[], session_id?, end_time?
+       Ghi chú: Có session_id: Waiting -> InProgress.
+                Không có: tạo phiên mới InProgress (is_instant = true),
+                end_time mặc định 00:00 hôm sau.
+                Xe được chọn -> Online.
+                Trả 409 nếu đã có phiên InProgress.
+
+POST   /api/sessions/current/end
+       Ghi chú: Chặn (409) nếu còn vé Waiting, Inused hoặc Overdue.
+                Xe về Offline.
+
+GET    /api/sessions/current
+       Ghi chú: Phiên đang làm.
+
+GET    /api/sessions/current/stats
+       Ghi chú: Thống kê phiên hiện tại.
+
+GET    /api/sessions
+       Input : status?, page, limit
+       Ghi chú: Lịch sử phiên.
+
+GET    /api/sessions/{id}
+       Ghi chú: Chi tiết một phiên.
+
+GET    /api/sessions/{id}/stats
+       Ghi chú: Thống kê phiên đã kết thúc.
+
+PATCH  /api/sessions/{id}
+       Input : date?, time?
+       Ghi chú: Chỉ sửa phiên Waiting.
+
+POST   /api/sessions/{id}/cancel
+       Ghi chú: Chỉ hủy phiên Waiting, -> Canceled.
+
+POST   /api/sessions/current/vehicles            (đề xuất bổ sung)
+       Input : vehicle_slugs[]
+       Ghi chú: Thêm xe vào phiên đang làm.
+
+DELETE /api/sessions/current/vehicles/{vehicle_id}   (đề xuất bổ sung)
+       Ghi chú: Bớt xe, chặn nếu xe đang Inused.
+
+
+3. XE ĐIỆN
+----------
+POST   /api/vehicles
+       Input : slug
+       Ghi chú: Mặc định Offline. 422 nếu slug sai định dạng hoặc đã tồn tại.
+
+GET    /api/vehicles
+       Input : status?, session_id?
+       Ghi chú: Danh sách xe cho dropdown, mặc định không gồm xe Deleted.
+
+GET    /api/vehicles/{id}
+       Ghi chú: Chi tiết xe.
+
+PATCH  /api/vehicles/{id}
+       Input : slug
+       Ghi chú: Sửa tên nhận diện, ID số không đổi.
+
+PATCH  /api/vehicles/{id}/status
+       Input : status
+       Ghi chú: Chỉ nhận Online, Repairing, Offline.
+                Chặn (409) nếu xe đang Inused hoặc gắn vé Overdue.
+
+DELETE /api/vehicles/{id}
+       Ghi chú: Xóa mềm: status = Deleted, ghi deleted_at.
+                Chặn nếu xe Inused hoặc nằm trong phiên InProgress.
+
+
+4. VÉ
+-----
+POST   /api/tickets
+       Input : phone, minutes, payment_method
+       Ghi chú: Cần có phiên InProgress. minutes >= thời gian tối thiểu.
+                Trả mã vé, số tiền đã thu, gợi ý xe Online.
+                Snapshot giá, phụ phí, ân hạn, cờ hoàn tiền vào vé.
+
+GET    /api/tickets
+       Input : session_id?, status?, page, limit
+       Ghi chú: Lịch sử vé, mặc định phiên hiện tại.
+
+GET    /api/tickets/search
+       Input : q, session_id?
+       Ghi chú: Tìm theo số điện thoại hoặc mã vé.
+
+GET    /api/tickets/queue
+       Ghi chú: Hàng chờ: vé Waiting, FIFO theo queued_at.
+
+GET    /api/tickets/overdue
+       Ghi chú: Vé quá hạn kèm số phút quá và phụ phí tạm tính.
+
+GET    /api/tickets/{id}
+       Ghi chú: Chi tiết vé.
+
+POST   /api/tickets/{id}/assign
+       Input : vehicle_slug
+       Ghi chú: Gán xe Online cho vé Waiting: vé -> Inused, xe -> Inused,
+                bắt đầu tính giờ.
+
+POST   /api/tickets/{id}/cancel
+       Input : refund_method?
+       Ghi chú: Chỉ vé Waiting. Trả refund_amount (tổng đã thanh toán).
+
+POST   /api/tickets/{id}/change-vehicle
+       Input : vehicle_slug, old_vehicle_status
+       Ghi chú: Xe mới phải Online. old_vehicle_status là Online hoặc Repairing.
+                Thời gian còn lại giữ nguyên.
+
+POST   /api/tickets/{id}/extend
+       Input : minutes, payment_method
+       Ghi chú: Cần bật gia hạn trong cài đặt.
+                Chấp nhận vé Inused và Overdue. Tính theo giá snapshot.
+
+POST   /api/tickets/{id}/return
+       Input : payment_method?, refund_method?
+       Ghi chú: Chấp nhận vé Inused và Overdue.
+                Trả phụ phí, hoàn tiền nếu trả sớm, và next_ticket.
+
+Quy tắc của return:
+- Quá giờ vượt thời gian ân hạn: tính phụ phí, payment_method là phương thức
+  thu phụ phí.
+- Trả sớm và cờ hoàn tiền (snapshot của vé) đang bật: hoàn theo số phút còn lại,
+  refund_method mặc định theo phương thức đã thu.
+- Trả sớm và hoàn tiền tắt: refund_amount = 0.
+- Sau khi trả: vé -> Completed, xe -> Online.
+
+Ví dụ phản hồi return:
+{
+  "ok": true,
+  "data": {
+    "ticket_no": 7,
+    "status": "Completed",
+    "overdue_minutes": 12,
+    "chargeable_overdue_minutes": 7,
+    "overdue_fee": 14000,
+    "refund_amount": 0,
+    "vehicle": { "id": 3, "slug": "xe-gau-03", "status": "Online" },
+    "next_ticket": { "ticket_no": 9, "phone": "09xxxxxxxx" }
+  }
+}
+
+
+5. CÀI ĐẶT
+----------
+GET    /api/settings
+       Ghi chú: Trả toàn bộ cài đặt hiện tại.
+
+POST   /api/settings/toggle_refund
+       Input : enabled
+
+POST   /api/settings/toggle_extend
+       Input : enabled
+
+PUT    /api/settings/
+       Input : packages[] gồm amount, minutes, is_default
+               (ví dụ 15000/30, 30000/60)
+
+POST   /api/settings/set_overdue_fee
+       Input : amount_per_minute
+
+POST   /api/settings/set_overdue_limit
+       Input : minutes
+
+POST   /api/settings/set_minimum_time
+       Input : minutes
+
+POST   /api/settings/logout
+
+Ghi chú: Đổi cài đặt chỉ áp dụng cho vé tạo sau đó, vì vé cũ đã lưu snapshot.
+
+
+6. MÃ LỖI NGHIỆP VỤ GỢI Ý
+-------------------------
+UNAUTHORIZED                 401  Cookie thiếu hoặc lệch
+ACCOUNT_DEACTIVATED          403  Đăng nhập bằng tài khoản Deactivate
+SESSION_ALREADY_IN_PROGRESS  409  Bắt đầu phiên khi đã có phiên đang làm
+NO_ACTIVE_SESSION            409  Tạo vé khi chưa có phiên InProgress
+SESSION_NOT_EDITABLE         409  Sửa hoặc hủy phiên không phải Waiting
+SESSION_HAS_OPEN_TICKETS     409  Kết thúc phiên khi còn vé Waiting, Inused, Overdue
+VEHICLE_NOT_AVAILABLE        409  Gán hoặc đổi sang xe không Online
+VEHICLE_IN_USE               409  Đổi trạng thái hoặc xóa xe đang dùng
+SLUG_TAKEN                   422  Trùng tên nhận diện
+BELOW_MINIMUM_TIME           422  Số phút nhỏ hơn mức tối thiểu
+INVALID_PAYMENT_METHOD       422  Không phải Cash hoặc Bank
+TICKET_NOT_CANCELABLE        409  Hủy vé không phải Waiting
+EXTEND_DISABLED              409  Gia hạn khi cài đặt đang tắt
+
+
+7. LƯU Ý
+--------
+- Gia hạn vé Overdue: đang cho phép, tính từ giờ kết thúc cũ.
+- Phụ phí quá giờ: đang tính chỉ phần vượt thời gian ân hạn
+  (ân hạn 5 phút, trễ 12 phút thì tính 7 phút).
+- Nên sửa index slug của xe thành partial unique (WHERE deleted_at IS NULL)
+  và thêm index chỉ cho phép một phiên InProgress:
+
+  DROP INDEX "uq_vehicles_slug_active";
+  CREATE UNIQUE INDEX "uq_vehicles_slug_active" ON "vehicles" ("slug")
+    WHERE "deleted_at" IS NULL;
+
+  CREATE UNIQUE INDEX "uq_sessions_one_in_progress" ON "sessions" ("status")
+    WHERE "status" = 'InProgress';
