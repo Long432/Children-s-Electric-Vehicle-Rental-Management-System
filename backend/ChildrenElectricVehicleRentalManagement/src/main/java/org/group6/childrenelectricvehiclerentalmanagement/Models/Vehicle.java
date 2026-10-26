@@ -1,16 +1,23 @@
 package org.group6.childrenelectricvehiclerentalmanagement.Models;
 
-import jakarta.persistence.*;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import lombok.Getter;
 import lombok.Setter;
+import org.group6.childrenelectricvehiclerentalmanagement.Enum.VehicleStatus;
+import org.hibernate.annotations.Audited;
 import org.hibernate.annotations.ColumnDefault;
+import org.springframework.data.annotation.Id;
 
 import java.time.LocalDateTime;
 
 @Getter
 @Setter
 @Entity
-@Table(name = "vehicles")
+@Audited.Table(name = "vehicles")
 public class Vehicle {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
