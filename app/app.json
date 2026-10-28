@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "Thuê xe điện trẻ em",
+    "slug": "ev-rental-app",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "org.group6.evrental"
+    },
+    "ios": {
+      "bundleIdentifier": "org.group6.evrental"
+    },
+    "plugins": [
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+        }
+      ]
+    ]
+  }
+}
