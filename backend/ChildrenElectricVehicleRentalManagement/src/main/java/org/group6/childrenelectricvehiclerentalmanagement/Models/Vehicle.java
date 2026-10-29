@@ -1,6 +1,5 @@
 package org.group6.childrenelectricvehiclerentalmanagement.Models;
 
-
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -10,9 +9,8 @@ import org.hibernate.annotations.ColumnDefault;
 import java.time.LocalDateTime;
 
 @Getter
-@Setter
 @Entity
-@Audited.Table(name = "vehicles")
+@Table(name="vehicles")
 public class Vehicle {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -22,7 +20,6 @@ public class Vehicle {
     @Column(name = "slug", nullable = false, length = Integer.MAX_VALUE)
     private String slug;
 
-    @ColumnDefault("'Offline'")
     @Column(name = "status", columnDefinition = "vehicle_status not null")
     private VehicleStatus status;
 
@@ -37,5 +34,25 @@ public class Vehicle {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    public Vehicle(String slug) {
+        this.slug = slug;
+        this.status = VehicleStatus.Offline;
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
 
+    public void setSlug(String slug) {
+        this.slug = slug;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void setStatus(VehicleStatus status) {
+        this.status = status;
+        if (status.equals(VehicleStatus.Deleted)) this.deletedAt = LocalDateTime.now();
+        else this.updatedAt = LocalDateTime.now();
+    }
+
+    public Vehicle() {
+
+    }
 }

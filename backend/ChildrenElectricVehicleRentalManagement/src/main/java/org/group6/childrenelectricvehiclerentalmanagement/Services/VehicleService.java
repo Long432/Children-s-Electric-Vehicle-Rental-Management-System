@@ -92,5 +92,7 @@ public class VehicleService {
             case Inused -> throw new UserException("vehicle is being use","Không thể xóa khi xe đang được sử dụng");
             case Online -> throw new UserException("vehicle is online","Không thể xóa khi xe đang trong trạng thái chờ");
         }
+        target.setStatus(VehicleStatus.Deleted);
+        vehicleRepository.save(target);
     }
 }
