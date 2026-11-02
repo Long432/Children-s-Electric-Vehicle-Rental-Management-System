@@ -19,10 +19,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.List;
 
 @Configuration
@@ -30,7 +26,6 @@ import java.util.List;
 public class SecurityConfig {
 
     @Bean
-    //Sử dụng BCrypt
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
@@ -41,37 +36,40 @@ public class SecurityConfig {
     }
 
     @Bean
-    //Filter chain cho từng request
-    public SecurityFilterChain filterChain(HttpSecurity http, RatelimitFilter ratelimitFilter, JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, RatelimitFilter ratelimitFilter, JwtAuthenticationFilter jwtAuthenticationFilter)  {
         http.csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .addFilterBefore(ratelimitFilter,UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(ratelimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(jwtAuthenticationFilter, RatelimitFilter.class)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/error").permitAll() //Khi có lỗi trong quá trình thực hiện chain (SecurityFilterChain)
-                        //Vehicle controller
+                        .requestMatchers("/error").permitAll()
                         .requestMatchers("/vehicle/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/sessions/start").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/sessions/current/end").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/sessions/current").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/sessions").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/sessions/{id}").permitAll()
+                        .requestMatchers(HttpMethod.PATCH, "/sessions/{id}").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/sessions/{id}/cancel").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/sessions/current/vehicles").permitAll()
+                        .requestMatchers(HttpMethod.DELETE, "/sessions/current/vehicles/{vehicle_id}").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
                 );
         return http.build();
     }
 
-
     @Bean
-    //Cross-Origin resource sharing config
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-
         configuration.setAllowedOrigins(List.of("http://localhost:3000"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
 
-        UrlBasedCorsConfigurationSource source =
-                new UrlBasedCorsConfigurationSource();
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
 
         return source;
     }
-
 }

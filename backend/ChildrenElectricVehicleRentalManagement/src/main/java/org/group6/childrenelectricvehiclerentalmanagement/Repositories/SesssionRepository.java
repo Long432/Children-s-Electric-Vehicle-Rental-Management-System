@@ -21,4 +21,6 @@ public interface SesssionRepository extends JpaRepository<Session, Long> {
     List<Session> findAllByPlannedEndAt_Date(LocalDate plannedEndAtDate);
 
     Session findTopByScheduledDate(LocalDate scheduledDate, Sort sort);
+
+    Optional<Session> findFirstByStatusOrderByIdDesc(SessionStatus status);
 }

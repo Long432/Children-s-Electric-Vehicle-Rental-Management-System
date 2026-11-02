@@ -4,6 +4,8 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SessionController.CreateSessionRequest;
 import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SessionController.SessionBasicResponse;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.Long.Requests;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.Long.Responses;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Session;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.User;
 import org.group6.childrenelectricvehiclerentalmanagement.Services.SessionService;
@@ -14,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 @Slf4j
 @Controller
-@RequestMapping(path = "/api/sessions")
+@RequestMapping(path = "throws Exception/sessions")
 @AllArgsConstructor
 public class SessionController extends BaseController {
     private SessionService sessionService;
@@ -22,7 +24,7 @@ public class SessionController extends BaseController {
     @PostMapping
     public ResponseEntity<?> createSession(@RequestBody CreateSessionRequest request, @AuthenticationPrincipal User user) throws Exception {
         log.info("Creating new session with status: Waiting");
-        return ResponseEntity.ok(new SessionBasicResponse(sessionService.createSession(request,user)));
+        return ResponseEntity.ok(new SessionBasicResponse(sessionService.createSession(request, user)));
     }
 
     @PostMapping("/start")
@@ -77,5 +79,20 @@ public class SessionController extends BaseController {
     public ResponseEntity<?> removeVehicleFromCurrentSession(@PathVariable Long vehicle_id) throws Exception {
         log.info("Removing vehicle with id: {} from current session", vehicle_id);
         return ResponseEntity.ok(sessionService.removeVehicleFromCurrentSession(vehicle_id));
+    }
+
+    @GetMapping("/current/stats")
+    public ResponseEntity<?> getCurrentStats(@AuthenticationPrincipal User actor) throws Exception {
+        Requests.SessionStatsRequest request = new Requests.SessionStatsRequest();
+        request.setActorId(actor.getId());
+        return ResponseEntity.ok(sessionService.getCurrentStats(request));
+    }
+
+    @GetMapping("/{id}/stats")
+    public ResponseEntity<Object> getStats(@PathVariable("id") String id, @AuthenticationPrincipal User actor) throws Exception {
+        Requests.SessionStatsRequest request = new Requests.SessionStatsRequest();
+        request.setActorId(actor.getId());
+        request.setSessionId(id);
+        return ResponseEntity.ok(sessionService.getStats(request));
     }
 }

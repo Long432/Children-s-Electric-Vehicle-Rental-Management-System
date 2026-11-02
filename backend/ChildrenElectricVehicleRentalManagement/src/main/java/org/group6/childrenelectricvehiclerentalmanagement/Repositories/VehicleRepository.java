@@ -2,11 +2,18 @@ package org.group6.childrenelectricvehiclerentalmanagement.Repositories;
 
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Vehicle;
 import org.springframework.data.jpa.repository.JpaRepository;
-
-import java.util.List;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import jakarta.persistence.LockModeType;
+import java.util.Optional;
 
 public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
-    List<Vehicle> findVehicleBySlug(String slug);
+    Optional<Vehicle> findBySlugAndDeletedAtIsNull(String slug);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select v from Vehicle v where v.slug = :slug and v.deletedAt is null")
+    Optional<Vehicle> lockBySlug(@Param("slug") String slug);
 
     boolean existsBySlug(String slug);
 }
