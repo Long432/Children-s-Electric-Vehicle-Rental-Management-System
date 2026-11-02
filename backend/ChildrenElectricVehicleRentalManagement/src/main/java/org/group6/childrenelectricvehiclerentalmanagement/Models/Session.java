@@ -59,5 +59,55 @@ public class Session {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    public Session(LocalDateTime plannedStartAT, LocalDateTime plannedEndAt, Boolean isInstant, User createdBy) {
+        if (isInstant) this.status=SessionStatus.InProgress;
+        else this.status=SessionStatus.Waiting;
+        this.scheduledDate = plannedStartAT.toLocalDate();
+        this.scheduledTime = plannedStartAT.toLocalTime();
+        this.plannedEndAt = plannedEndAt;
+        this.isInstant = isInstant;
+        this.nextTicketNo=1;
+        this.createdBy = createdBy;
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
 
+    public Session() {
+
+    }
+
+    public void setStatus(SessionStatus status) {
+        this.status = status;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void setScheduledDate(LocalDate scheduledDate) {
+        this.scheduledDate = scheduledDate;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void setScheduledTime(LocalTime scheduledTime) {
+        this.scheduledTime = scheduledTime;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void setPlannedEndAt(LocalDateTime plannedEndAt) {
+        this.plannedEndAt = plannedEndAt;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void setStartedAt(LocalDateTime startedAt) {
+        this.startedAt = startedAt;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void setEndedAt(LocalDateTime endedAt) {
+        this.endedAt = endedAt;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void setNextTicketNo(Integer nextTicketNo) {
+        this.nextTicketNo = nextTicketNo;
+        this.updatedAt = LocalDateTime.now();
+    }
 }
