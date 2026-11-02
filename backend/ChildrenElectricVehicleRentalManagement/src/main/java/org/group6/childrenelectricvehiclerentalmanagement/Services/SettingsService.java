@@ -14,11 +14,11 @@ import org.group6.childrenelectricvehiclerentalmanagement.Models.User;
 import org.group6.childrenelectricvehiclerentalmanagement.Repositories.PackageRepository;
 import org.group6.childrenelectricvehiclerentalmanagement.Repositories.SettingsRepository;
 import org.group6.childrenelectricvehiclerentalmanagement.Repositories.UserRepository;
-import org.group6.childrenelectricvehiclerentalmanagement.Utility.AmountPerMinuteRequestValidator;
-import org.group6.childrenelectricvehiclerentalmanagement.Utility.MinutesRequestValidator;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.Long.AmountPerMinuteRequestValidator;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.Long.MinutesRequestValidator;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.Long.ToggleRequestValidator;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.Long.UpdatePackagesRequestValidator;
 import org.group6.childrenelectricvehiclerentalmanagement.Utility.TimeUtil;
-import org.group6.childrenelectricvehiclerentalmanagement.Utility.ToggleRequestValidator;
-import org.group6.childrenelectricvehiclerentalmanagement.Utility.UpdatePackagesRequestValidator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,15 +28,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Nghiệp vụ cài đặt. Mỗi hàm: kiểm tra DTO bằng validator -> đọc/ghi -> ghi audit -> trả toàn bộ cài đặt.
- * Service chỉ ném exception, không catch; Controller là nơi duy nhất catch.
- * Đổi cài đặt chỉ áp dụng cho vé tạo sau đó (vé cũ đã lưu snapshot).
- */
 @Service
 public class SettingsService {
     private static final Short SETTINGS_ID = 1;
-    private static final String ENTITY_TYPE = "settings";
 
     private static final ToggleRequestValidator TOGGLE_VALIDATOR = new ToggleRequestValidator();
     private static final UpdatePackagesRequestValidator PACKAGES_VALIDATOR = new UpdatePackagesRequestValidator();
@@ -59,13 +53,16 @@ public class SettingsService {
         this.auditLogService = auditLogService;
     }
 
-    /** GET /api/settings */
+    @Transactional(rollbackFor = Exception.class)
+    public Settings loadSettings() {
+        return loadOrCreate();
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public SettingsResponse getSettings() {
         return toResponse(loadOrCreate());
     }
 
-    /** POST /api/settings/toggle_refund */
     @Transactional(rollbackFor = Exception.class)
     public SettingsResponse toggleRefund(User actor, ToggleRequest request) throws ValidationException {
         TOGGLE_VALIDATOR.validate(request);
@@ -77,7 +74,6 @@ public class SettingsService {
         return toResponse(settings);
     }
 
-    /** POST /api/settings/toggle_extend */
     @Transactional(rollbackFor = Exception.class)
     public SettingsResponse toggleExtend(User actor, ToggleRequest request) throws ValidationException {
         TOGGLE_VALIDATOR.validate(request);
@@ -89,7 +85,6 @@ public class SettingsService {
         return toResponse(settings);
     }
 
-    /** POST /api/settings/set_overdue_fee */
     @Transactional(rollbackFor = Exception.class)
     public SettingsResponse setOverdueFee(User actor, AmountPerMinuteRequest request) throws ValidationException {
         OVERDUE_FEE_VALIDATOR.validate(request);
@@ -101,7 +96,6 @@ public class SettingsService {
         return toResponse(settings);
     }
 
-    /** POST /api/settings/set_overdue_limit */
     @Transactional(rollbackFor = Exception.class)
     public SettingsResponse setOverdueLimit(User actor, MinutesRequest request) throws ValidationException {
         OVERDUE_LIMIT_VALIDATOR.validate(request);
@@ -113,7 +107,6 @@ public class SettingsService {
         return toResponse(settings);
     }
 
-    /** POST /api/settings/set_minimum_time */
     @Transactional(rollbackFor = Exception.class)
     public SettingsResponse setMinimumTime(User actor, MinutesRequest request) throws ValidationException {
         MINIMUM_TIME_VALIDATOR.validate(request);
@@ -125,14 +118,10 @@ public class SettingsService {
         return toResponse(settings);
     }
 
-    /**
-     * PUT /api/settings : thay toàn bộ danh sách gói giá.
-     * Gói cũ được chuyển active = false (giữ lịch sử), gói mới được thêm với active = true.
-     */
     @Transactional(rollbackFor = Exception.class)
     public SettingsResponse updatePackages(User actor, UpdatePackagesRequest request) throws ValidationException {
         PACKAGES_VALIDATOR.validate(request);
-        LocalDateTime now = TimeUtil.nowUtc();
+        LocalDateTime now = TimeUtil.now();
 
         List<Package> current = packageRepository.findByActiveTrueOrderByMinutesAsc();
         List<Map<String, Object>> before = describePackages(current);
@@ -141,7 +130,6 @@ public class SettingsService {
             old.setActive(false);
             old.setUpdatedAt(now);
         }
-        // Flush ngay để các gói cũ hết hiệu lực trước khi chèn gói mới (tránh vướng index một gói mặc định).
         packageRepository.saveAllAndFlush(current);
 
         List<Package> created = new ArrayList<>();
@@ -165,15 +153,12 @@ public class SettingsService {
         return toResponse(loadOrCreate());
     }
 
-    // ---------------------------------------------------------------- helpers
-
     private Settings loadOrCreate() {
         return settingsRepository.findById(SETTINGS_ID).orElseGet(this::createDefaultSettings);
     }
 
-    /** Chỉ chạy khi chưa có dòng settings (nên chèn sẵn bằng script SQL). */
     private Settings createDefaultSettings() {
-        LocalDateTime now = TimeUtil.nowUtc();
+        LocalDateTime now = TimeUtil.now();
         Settings settings = new Settings();
         settings.setId(SETTINGS_ID);
         settings.setRefundEnabled(false);
@@ -188,7 +173,7 @@ public class SettingsService {
 
     private void saveSettings(Settings settings, User actor) {
         settings.setUpdatedBy(userRepository.getReferenceById(actor.getId()));
-        settings.setUpdatedAt(TimeUtil.nowUtc());
+        settings.setUpdatedAt(TimeUtil.now());
         settingsRepository.save(settings);
     }
 
@@ -197,9 +182,7 @@ public class SettingsService {
         beforeMap.put(field, before);
         Map<String, Object> afterMap = new LinkedHashMap<>();
         afterMap.put(field, after);
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("before", beforeMap);
-        payload.put("after", afterMap);
+        auditLogService.log(actor, action, "settings", actor.getId(), beforeMap, afterMap);
     }
 
     private List<Map<String, Object>> describePackages(List<Package> packages) {
@@ -226,6 +209,6 @@ public class SettingsService {
                 settings.getOverdueGraceMinutes(),
                 settings.getMinimumMinutes(),
                 packages,
-                TimeUtil.toIsoUtc(settings.getUpdatedAt()));
+                settings.getUpdatedAt().toString());
     }
 }

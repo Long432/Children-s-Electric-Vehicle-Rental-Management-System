@@ -1,7 +1,8 @@
-package org.group6.childrenelectricvehiclerentalmanagement.Utility;
+package org.group6.childrenelectricvehiclerentalmanagement.Utility.Long;
 
 import org.group6.childrenelectricvehiclerentalmanagement.DTOs.AmountPerMinuteRequest;
 import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.ValidationException;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.RequestValidator;
 
 public class AmountPerMinuteRequestValidator implements RequestValidator<AmountPerMinuteRequest> {
     public static final int MAX_FEE_PER_MINUTE = 1_000_000;

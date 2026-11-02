@@ -1,7 +1,8 @@
-package org.group6.childrenelectricvehiclerentalmanagement.Utility;
+package org.group6.childrenelectricvehiclerentalmanagement.Utility.Long;
 
 import org.group6.childrenelectricvehiclerentalmanagement.DTOs.MinutesRequest;
 import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.ValidationException;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.RequestValidator;
 
 /** Kiểm tra trường minutes trong khoảng [min, max]; dùng chung cho nhiều API với nhãn và giới hạn khác nhau. */
 public class MinutesRequestValidator implements RequestValidator<MinutesRequest> {

@@ -6,22 +6,21 @@ import lombok.Setter;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.SessionStatus;
 import org.hibernate.annotations.ColumnDefault;
 
-import java.time.LocalDateTime;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 @Getter
 @Setter
 @Entity
 @Table(name = "sessions")
-public class Session {
+public class Session extends Timestamped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false)
     private Long id;
 
-    @ColumnDefault("'Waiting'")
-    @Column(name = "status", columnDefinition = "session_status not null")
+    @Column(name = "status", nullable = false)
     private SessionStatus status;
 
     @Column(name = "scheduled_date", nullable = false)
@@ -78,21 +77,7 @@ public class Session {
 
     public void setStatus(SessionStatus status) {
         this.status = status;
-        this.updatedAt = LocalDateTime.now();
-    }
-
-    public void setScheduledDate(LocalDate scheduledDate) {
-        this.scheduledDate = scheduledDate;
-        this.updatedAt = LocalDateTime.now();
-    }
-
-    public void setScheduledTime(LocalTime scheduledTime) {
-        this.scheduledTime = scheduledTime;
-        this.updatedAt = LocalDateTime.now();
-    }
-
-    public void setPlannedEndAt(LocalDateTime plannedEndAt) {
-        this.plannedEndAt = plannedEndAt;
+        if (status == SessionStatus.Ended) this.endedAt=LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }
 

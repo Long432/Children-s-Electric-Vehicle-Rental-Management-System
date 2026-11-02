@@ -5,24 +5,30 @@ import lombok.Getter;
 import lombok.Setter;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.PaymentType;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.PaymentMethod;
-import org.hibernate.annotations.ColumnDefault;
-
 import java.time.LocalDateTime;
 
 @Getter
 @Setter
 @Entity
 @Table(name = "payments")
-public class Payment {
+public class Payment extends Timestamped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false)
     private Long id;
 
-    @Column(name = "type", columnDefinition = "payment_type not null")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "session_id", nullable = false)
+    private Session session;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "ticket_id", nullable = false)
+    private Ticket ticket;
+
+    @Column(name = "type", nullable = false)
     private PaymentType type;
 
-    @Column(name = "method", columnDefinition = "payment_method not null")
+    @Column(name = "method", nullable = false)
     private PaymentMethod method;
 
     @Column(name = "amount", nullable = false)
@@ -34,10 +40,4 @@ public class Payment {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "created_by", nullable = false)
     private User createdBy;
-
-    @ColumnDefault("now()")
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
-
-
 }

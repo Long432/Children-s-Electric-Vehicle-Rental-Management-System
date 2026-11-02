@@ -5,19 +5,21 @@ import lombok.Getter;
 import lombok.Setter;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.TicketStatus;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.PaymentMethod;
-import org.hibernate.annotations.ColumnDefault;
-
 import java.time.LocalDateTime;
 
 @Getter
 @Setter
 @Entity
 @Table(name = "tickets")
-public class Ticket {
+public class Ticket extends Timestamped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "session_id", nullable = false)
+    private Session session;
 
     @Column(name = "ticket_no", nullable = false)
     private Integer ticketNo;
@@ -25,11 +27,14 @@ public class Ticket {
     @Column(name = "phone", nullable = false, length = Integer.MAX_VALUE)
     private String phone;
 
-    @ColumnDefault("'Waiting'")
-    @Column(name = "status", columnDefinition = "ticket_status not null")
+    @Column(name = "status", nullable = false)
     private TicketStatus status;
 
-    @Column(name = "payment_method", columnDefinition = "payment_method not null")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "vehicle_id")
+    private Vehicle vehicle;
+
+    @Column(name = "payment_method", nullable = false)
     private PaymentMethod paymentMethod;
 
     @Column(name = "total_minutes", nullable = false)
@@ -65,17 +70,14 @@ public class Ticket {
     @Column(name = "returned_at")
     private LocalDateTime returnedAt;
 
-    @ColumnDefault("0")
     @Column(name = "overdue_minutes", nullable = false)
-    private Integer overdueMinutes;
+    private Integer overdueMinutes = 0;
 
-    @ColumnDefault("0")
     @Column(name = "overdue_fee", nullable = false)
-    private Integer overdueFee;
+    private Integer overdueFee = 0;
 
-    @ColumnDefault("0")
     @Column(name = "refund_amount", nullable = false)
-    private Integer refundAmount;
+    private Integer refundAmount = 0;
 
     @Column(name = "canceled_at")
     private LocalDateTime canceledAt;
@@ -83,12 +85,4 @@ public class Ticket {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "created_by", nullable = false)
     private User createdBy;
-
-    @ColumnDefault("now()")
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
-
-    @ColumnDefault("now()")
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
 }

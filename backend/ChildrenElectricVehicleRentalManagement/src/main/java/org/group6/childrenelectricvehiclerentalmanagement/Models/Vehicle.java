@@ -4,14 +4,13 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.VehicleStatus;
-import org.hibernate.annotations.Audited;
-import org.hibernate.annotations.ColumnDefault;
 import java.time.LocalDateTime;
 
 @Getter
+@Setter
 @Entity
-@Table(name="vehicles")
-public class Vehicle {
+@Table(name = "vehicles")
+public class Vehicle extends Timestamped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false)
@@ -20,39 +19,25 @@ public class Vehicle {
     @Column(name = "slug", nullable = false, length = Integer.MAX_VALUE)
     private String slug;
 
-    @Column(name = "status", columnDefinition = "vehicle_status not null")
+    @Column(name = "status", nullable = false)
     private VehicleStatus status;
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
-    @ColumnDefault("now()")
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
-
-    @ColumnDefault("now()")
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
     public Vehicle(String slug) {
         this.slug = slug;
         this.status = VehicleStatus.Offline;
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
     }
 
     public void setSlug(String slug) {
         this.slug = slug;
-        this.updatedAt = LocalDateTime.now();
     }
 
     public void setStatus(VehicleStatus status) {
         this.status = status;
-        if (status.equals(VehicleStatus.Deleted)) this.deletedAt = LocalDateTime.now();
-        else this.updatedAt = LocalDateTime.now();
+        if (status == VehicleStatus.Deleted) this.deletedAt = java.time.LocalDateTime.now();
     }
 
-    public Vehicle() {
-
-    }
+    public Vehicle() {}
 }
