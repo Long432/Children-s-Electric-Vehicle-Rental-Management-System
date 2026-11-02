@@ -1,5 +1,6 @@
 package org.group6.childrenelectricvehiclerentalmanagement.Utility.Config;
 
+import jakarta.servlet.http.Cookie;
 import org.group6.childrenelectricvehiclerentalmanagement.Utility.Filters.JwtAuthenticationFilter;
 import org.group6.childrenelectricvehiclerentalmanagement.Utility.Filters.RatelimitFilter;
 import org.springframework.context.annotation.Bean;
@@ -18,6 +19,10 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.List;
 
 @Configuration
@@ -28,6 +33,11 @@ public class SecurityConfig {
     //Sử dụng BCrypt
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public CookieEncoder cookieEncoder(){
+        return new CookieEncoder();
     }
 
     @Bean
@@ -63,4 +73,5 @@ public class SecurityConfig {
 
         return source;
     }
+
 }
