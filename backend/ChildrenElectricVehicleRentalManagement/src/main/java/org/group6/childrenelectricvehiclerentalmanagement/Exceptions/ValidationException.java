@@ -8,7 +8,7 @@ public class ValidationException extends AbstractException {
     private final String field;
 
     public ValidationException(String field, String userMessage) {
-        super("validation failed on field '" + field + "': " + userMessage, userMessage, 422);
+        super("Request field '" + field + "' is invalid: " + userMessage, "VALIDATION_ERROR", userMessage, 422);
         this.field = field;
     }
 

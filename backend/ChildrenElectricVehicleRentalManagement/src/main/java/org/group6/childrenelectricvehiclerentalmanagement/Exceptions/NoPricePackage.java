@@ -2,6 +2,6 @@ package org.group6.childrenelectricvehiclerentalmanagement.Exceptions;
 
 public class NoPricePackage extends AbstractException {
     public NoPricePackage() {
-        super("NO_PRICE_PACKAGE", "Chưa cấu hình gói giá mặc định", 409);
+        super("No default pricing package is configured in the system", "NO_PRICE_PACKAGE", "Hệ thống chưa có gói giá mặc định", 409);
     }
 }

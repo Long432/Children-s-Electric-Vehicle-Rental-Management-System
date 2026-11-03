@@ -7,14 +7,15 @@ import org.springframework.http.HttpStatusCode;
 public class AbstractException extends Exception{
     private final String systemLog;
     private final String userMessage;
+    private final String errorCode;
     private final HttpStatusCode statusCode;
     // userMessage sẽ là tin nhắn đầy đủ trả về cho người dùng còn systemLog sẽ là tin nhắn nối liền với "không thể thực hiện yêu cầu do"
 
-    public AbstractException(String message, String userMessage, int statusCode) {
+    public AbstractException(String message, String errorCode, String userMessage, int statusCode) {
         super(message);
         this.systemLog = message;
         this.userMessage = userMessage;
+        this.errorCode = errorCode;
         this.statusCode = HttpStatusCode.valueOf(statusCode);
     }
-
 }
