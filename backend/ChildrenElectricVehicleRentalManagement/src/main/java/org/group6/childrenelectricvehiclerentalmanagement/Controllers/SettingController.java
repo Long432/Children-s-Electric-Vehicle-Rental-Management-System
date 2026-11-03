@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Việc kiểm tra từng field do validator trong package Utility đảm nhận, gọi ở đầu hàm service.
  */
 @RestController
-@RequestMapping("throws Exception/settings")
+@RequestMapping("/settings")
 public class SettingController extends BaseController {
     private final AuthService authService;
     private final SettingsService settingsService;
@@ -33,7 +33,7 @@ public class SettingController extends BaseController {
     }
 
     /** GET /api/settings : lấy toàn bộ cài đặt */
-    @GetMapping({"", "/"})
+    @GetMapping("/")
     public ResponseEntity<?> getSettings() {
         return ResponseEntity.ok(settingsService.getSettings());
     }
