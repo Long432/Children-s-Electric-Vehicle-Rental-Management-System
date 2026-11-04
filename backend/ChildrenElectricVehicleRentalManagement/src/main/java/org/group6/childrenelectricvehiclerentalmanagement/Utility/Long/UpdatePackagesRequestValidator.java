@@ -1,7 +1,7 @@
 package org.group6.childrenelectricvehiclerentalmanagement.Utility.Long;
 
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.PackageItemRequest;
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.UpdatePackagesRequest;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsController.PackageItemRequest;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsController.UpdatePackagesRequest;
 import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.ValidationException;
 import org.group6.childrenelectricvehiclerentalmanagement.Utility.RequestValidator;
 

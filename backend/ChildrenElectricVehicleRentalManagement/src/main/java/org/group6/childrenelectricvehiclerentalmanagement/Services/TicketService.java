@@ -13,7 +13,7 @@ import org.group6.childrenelectricvehiclerentalmanagement.Models.Payment;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Session;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Settings;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Ticket;
-import org.group6.childrenelectricvehiclerentalmanagement.Models.TicketVehicleHistory;
+import org.group6.childrenelectricvehiclerentalmanagement.Models.LinkingObject.TicketVehicleHistory;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.User;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Vehicle;
 import org.group6.childrenelectricvehiclerentalmanagement.Repositories.PackageRepository;
@@ -26,6 +26,7 @@ import org.group6.childrenelectricvehiclerentalmanagement.Repositories.UserRepos
 import org.group6.childrenelectricvehiclerentalmanagement.Repositories.VehicleRepository;
 import org.group6.childrenelectricvehiclerentalmanagement.Utility.*;
 import lombok.RequiredArgsConstructor;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.Validators.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -65,13 +66,13 @@ public class TicketService {
         }
 
         Session session = sessionRepository.lockByStatus(SessionStatus.InProgress).stream().findFirst()
-                .orElseThrow(() -> new NoActiveSession());
+                .orElseThrow(NoActiveSession::new);
 
         List<ValidPackage> packages = packageRepository.findByActiveTrueOrderByMinutesAsc().stream()
                 .map(p -> new ValidPackage(p.getAmount(), p.getMinutes(), Boolean.TRUE.equals(p.getIsDefault())))
                 .toList();
         ValidPackage defaultPackage = packages.stream().filter(ValidPackage::isDefault).findFirst()
-                .orElseThrow(() -> new NoPricePackage());
+                .orElseThrow(NoPricePackage::new);
 
         int price = PricingUtil.priceForNewTicket(minutes, packages, defaultPackage);
         LocalDateTime now = TimeUtil.now();

@@ -1,4 +1,6 @@
-package org.group6.childrenelectricvehiclerentalmanagement.Utility;
+package org.group6.childrenelectricvehiclerentalmanagement.Utility.Validators;
+
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.ValidPackage;
 
 import java.time.Duration;
 import java.time.LocalDateTime;

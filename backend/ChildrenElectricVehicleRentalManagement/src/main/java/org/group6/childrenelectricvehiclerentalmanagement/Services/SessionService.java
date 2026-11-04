@@ -15,10 +15,8 @@ import org.group6.childrenelectricvehiclerentalmanagement.Repositories.PaymentRe
 import org.group6.childrenelectricvehiclerentalmanagement.Repositories.SesssionRepository;
 import org.group6.childrenelectricvehiclerentalmanagement.Repositories.SessionVehicleRepository;
 import org.group6.childrenelectricvehiclerentalmanagement.Repositories.TicketRepository;
-import org.group6.childrenelectricvehiclerentalmanagement.Utility.IdValidator;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.Validators.IdValidator;
 import org.group6.childrenelectricvehiclerentalmanagement.Utility.TimeUtil;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

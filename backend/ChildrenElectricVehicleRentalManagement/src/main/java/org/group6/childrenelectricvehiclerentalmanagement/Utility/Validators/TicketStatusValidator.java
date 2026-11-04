@@ -1,4 +1,4 @@
-package org.group6.childrenelectricvehiclerentalmanagement.Utility;
+package org.group6.childrenelectricvehiclerentalmanagement.Utility.Validators;
 
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.TicketStatus;
 import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.ValidationException;

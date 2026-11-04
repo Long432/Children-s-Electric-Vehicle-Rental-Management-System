@@ -1,6 +1,6 @@
 package org.group6.childrenelectricvehiclerentalmanagement.Repositories;
 
-import org.group6.childrenelectricvehiclerentalmanagement.Models.SessionVehicle;
+import org.group6.childrenelectricvehiclerentalmanagement.Models.LinkingObject.SessionVehicle;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 

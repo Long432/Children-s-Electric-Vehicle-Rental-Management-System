@@ -1,9 +1,9 @@
 package org.group6.childrenelectricvehiclerentalmanagement.Controllers;
 
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.AmountPerMinuteRequest;
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.MinutesRequest;
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.ToggleRequest;
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.UpdatePackagesRequest;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsController.AmountPerMinuteRequest;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsController.MinutesRequest;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsController.ToggleRequest;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsController.UpdatePackagesRequest;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.User;
 import org.group6.childrenelectricvehiclerentalmanagement.Services.AuthService;
 import org.group6.childrenelectricvehiclerentalmanagement.Services.SettingsService;

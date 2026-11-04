@@ -1,4 +1,4 @@
-package org.group6.childrenelectricvehiclerentalmanagement.DTOs;
+package org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsController;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;

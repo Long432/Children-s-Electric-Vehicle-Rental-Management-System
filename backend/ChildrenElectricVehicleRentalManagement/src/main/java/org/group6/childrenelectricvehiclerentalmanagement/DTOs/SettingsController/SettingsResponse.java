@@ -1,7 +1,7 @@
 package org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsController;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.PackageResponse;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsController.PackageResponse;
 import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsController.*;
 import lombok.Getter;
 

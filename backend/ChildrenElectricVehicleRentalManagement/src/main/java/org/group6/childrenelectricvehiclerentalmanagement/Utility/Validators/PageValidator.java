@@ -1,6 +1,7 @@
-package org.group6.childrenelectricvehiclerentalmanagement.Utility;
+package org.group6.childrenelectricvehiclerentalmanagement.Utility.Validators;
 
 import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.ValidationException;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.PageParams;
 
 public final class PageValidator {
     public static final int DEFAULT_LIMIT = 20;

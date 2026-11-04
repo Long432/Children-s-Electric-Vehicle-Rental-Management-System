@@ -1,6 +1,6 @@
 package org.group6.childrenelectricvehiclerentalmanagement.Repositories;
 
-import org.group6.childrenelectricvehiclerentalmanagement.Models.TicketVehicleHistory;
+import org.group6.childrenelectricvehiclerentalmanagement.Models.LinkingObject.TicketVehicleHistory;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 import java.util.Optional;

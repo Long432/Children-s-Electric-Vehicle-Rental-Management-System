@@ -1,6 +1,6 @@
 package org.group6.childrenelectricvehiclerentalmanagement.Utility.Long;
 
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.AmountPerMinuteRequest;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsController.AmountPerMinuteRequest;
 import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.ValidationException;
 import org.group6.childrenelectricvehiclerentalmanagement.Utility.RequestValidator;
 

@@ -1,12 +1,12 @@
 package org.group6.childrenelectricvehiclerentalmanagement.Services;
 
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.AmountPerMinuteRequest;
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.MinutesRequest;
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.PackageItemRequest;
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.PackageResponse;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsController.AmountPerMinuteRequest;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsController.MinutesRequest;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsController.PackageItemRequest;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsController.PackageResponse;
 import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsController.SettingsResponse;
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.ToggleRequest;
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.UpdatePackagesRequest;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsController.ToggleRequest;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsController.UpdatePackagesRequest;
 import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.ValidationException;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Package;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Settings;
