@@ -45,6 +45,12 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/vehicle/**").permitAll()
+
+                        .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/auth/signup").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/auth/logout").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/auth/me").authenticated()
+
                         .requestMatchers(HttpMethod.POST, "/sessions/start").permitAll()
                         .requestMatchers(HttpMethod.POST, "/sessions/current/end").permitAll()
                         .requestMatchers(HttpMethod.GET, "/sessions/current").permitAll()
@@ -53,8 +59,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/sessions/{id}").permitAll()
                         .requestMatchers(HttpMethod.POST, "/sessions/{id}/cancel").permitAll()
                         .requestMatchers(HttpMethod.POST, "/sessions/current/vehicles").permitAll()
+                        .requestMatchers(HttpMethod.POST,"/sessions").permitAll()
                         .requestMatchers(HttpMethod.DELETE, "/sessions/current/vehicles/{vehicle_id}").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
                 );
         return http.build();
     }

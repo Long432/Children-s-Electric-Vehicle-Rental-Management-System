@@ -1,16 +1,13 @@
 package org.group6.childrenelectricvehiclerentalmanagement.Services;
 
 import lombok.RequiredArgsConstructor;
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.AuthController.LoginRequest;
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.AuthController.LoginResponse;
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.AuthController.LoginResult;
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.AuthController.MeResponse;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.AuthController.*;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.UserStatus;
-import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.AbstractException;
-import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.UserNotExitsException;
+import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.*;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.User;
 import org.group6.childrenelectricvehiclerentalmanagement.Repositories.UserRepository;
 import org.group6.childrenelectricvehiclerentalmanagement.Utility.Config.CookieEncoder;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.JwtUtil;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,7 +25,6 @@ import java.util.Base64;
 public class AuthService {
 
     private static final boolean SESSION_REPLACE_EXISTING = true;
-    private static final int COOKIE_BYTE_LENGTH = 32;
     private static final int COOKIE_MAX_AGE_DAYS = 30;
     private static final String LOGIN_FAILED_CODE = "INVALID_CREDENTIALS";
     private static final String LOGIN_FAILED_MESSAGE = "Thông tin đăng nhập không đúng";
@@ -44,23 +40,21 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final CookieEncoder cookieEncoder;
-    private final SecureRandom secureRandom = new SecureRandom();
+    private final JwtUtil jwtUtil;
+
+    @Transactional
+    public User signUp(SignUpRequest request) throws Exception{
+        return userRepository.save(new User(request.username(), passwordEncoder.encode(request.password())));
+    }
 
     @Transactional
     public LoginResult login(LoginRequest request) throws Exception {
         String username = request.username() == null ? null : request.username().trim();
         String password = request.password();
 
-        if (username == null || username.isBlank() || password == null || password.isBlank()) {
-            throw new AbstractException(LOGIN_FAILED_CODE, LOGIN_FAILED_MESSAGE, 401);
-        }
+        if (username == null || username.isBlank() || password == null || password.isBlank()) throw new AbstractException("login not success because user or password is empty","EMPTY_FIELD", "Vui lòng nhập username và mật khẩu", 401);
 
-        User user = userRepository.findByUsername(username).orElse(null);
-
-        if (user == null) {
-            dummyPasswordMatch(password);
-            throw new AbstractException(LOGIN_FAILED_CODE, LOGIN_FAILED_MESSAGE, 401);
-        }
+        User user = userRepository.findByUsername(username).orElseThrow(()->new UserNotExitsException(request.username()));
 
         boolean passwordMatches;
         try {
@@ -68,45 +62,48 @@ public class AuthService {
         } catch (Exception e) {
             passwordMatches = false;
         }
-        if (!passwordMatches) {
-            throw new AbstractException(LOGIN_FAILED_CODE, LOGIN_FAILED_MESSAGE, 401);
-        }
 
-        if (user.getStatus() == UserStatus.Deactivate) {
-            throw new AbstractException("ACCOUNT_DEACTIVATED", "Tài khoản đã bị vô hiệu hóa", 401);
-        }
+        if (!passwordMatches) throw new AbstractException("login not success because invalid credentials",LOGIN_FAILED_CODE, LOGIN_FAILED_MESSAGE, 401);
+        if (user.getStatus() == UserStatus.Deactivate) throw new UserDeactivated();
+        if (user.getStatus() == UserStatus.Online) throw new AbstractException("user is already logged in","LOGGED_IN","Người dùng hiện đang online",403);
 
-        applyLoginPolicy(user);
-
-        String rawCookie = generateCookie();
+        String rawCookie = jwtUtil.generateToken(user);
         String cookieHash;
         try {
             cookieHash = cookieEncoder.encode(rawCookie);
         } catch (NoSuchAlgorithmException e) {
-            throw new AbstractException("COOKEN_ERROR", "Không thể tạo phiên đăng nhập", 500);
+            throw new AbstractException("COOKEN_ERROR","COOKEN_ERROR", "Không thể tạo phiên đăng nhập", 500);
         }
 
-        LocalDateTime expiresAt = LocalDateTime.now().plusDays(COOKIE_MAX_AGE_DAYS);
+        LocalDateTime expiresAt = LocalDateTime.now().plus(Duration.ofMillis(jwtUtil.expirationMs()));
 
         user.setCookieHash(cookieHash);
         user.setCookieExpiresAt(expiresAt);
         user.setLastLoginAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());
         user.setStatus(UserStatus.Online);
+
         userRepository.save(user);
 
-        LoginResponse response = new LoginResponse(user.getId(), user.getUsername(), user.getStatus());
+        LoginResponse response = new LoginResponse(userRepository.save(user));
         int maxAgeSeconds = (int) Duration.between(LocalDateTime.now(), expiresAt).getSeconds();
+
         return new LoginResult(response, rawCookie, maxAgeSeconds);
     }
 
     @Transactional(readOnly = true)
     public MeResponse getMe(User actor) throws Exception {
-        return new MeResponse(actor.getId(), actor.getUsername(), actor.getStatus());
+        if (actor.getStatus()==UserStatus.Offline) throw new UserLoggedOut();
+        if (actor.getStatus()==UserStatus.Deactivate) throw new UserDeactivated();
+
+        return new MeResponse(actor);
     }
 
     @Transactional
     public void logout(User actor) throws Exception {
+        if (actor.getStatus()==UserStatus.Offline) throw new UserLoggedOut();
+        if (actor.getStatus()==UserStatus.Deactivate) throw new UserDeactivated();
+
         actor.setCookieHash(null);
         actor.setCookieExpiresAt(null);
         actor.setStatus(UserStatus.Offline);
@@ -114,22 +111,16 @@ public class AuthService {
         userRepository.save(actor);
     }
 
-    private void applyLoginPolicy(User user) throws Exception {
-        if (SESSION_REPLACE_EXISTING) {
-            return;
-        }
-    }
+//    private void applyLoginPolicy(User user) throws Exception {
+//        if (SESSION_REPLACE_EXISTING) {
+//            return;
+//        }
+//    }
 
-    private void dummyPasswordMatch(String password) {
-        try {
-            String dummyHash = "$2a$10$abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHI";
-            passwordEncoder.matches(password, dummyHash);
-        } catch (Exception ignored) {}
-    }
-
-    private String generateCookie() {
-        byte[] random = new byte[COOKIE_BYTE_LENGTH];
-        secureRandom.nextBytes(random);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(random);
-    }
+//    private void dummyPasswordMatch(String password) {
+//        try {
+//            String dummyHash = "$2a$10$abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHI";
+//            passwordEncoder.matches(password, dummyHash);
+//        } catch (Exception ignored) {}
+//    }
 }

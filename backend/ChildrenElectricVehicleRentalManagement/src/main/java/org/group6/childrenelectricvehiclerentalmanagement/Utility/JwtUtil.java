@@ -26,6 +26,9 @@ public class JwtUtil{
         this.secret = secret;
         this.expirationMs = expirationMs;
     }
+    public Long expirationMs(){
+        return this.expirationMs;
+    }
 
     public String generateToken(User user) {
         try {
