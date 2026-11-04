@@ -40,4 +40,23 @@ public class Payment extends Timestamped {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "created_by", nullable = false)
     private User createdBy;
+
+    public Payment(Session session, Ticket ticket, User createdBy) {
+        this.session = session;
+        this.ticket = ticket;
+        this.type = PaymentType.Ticket;
+        this.method = ticket.getPaymentMethod();
+        this.createdBy = createdBy;
+    }
+    public Payment(Session session, Ticket ticket, PaymentMethod method, User createdBy) {
+        this.session = session;
+        this.ticket = ticket;
+        this.type = PaymentType.Ticket;
+        this.method = method;
+        this.createdBy = createdBy;
+    }
+
+    public Payment() {
+
+    }
 }

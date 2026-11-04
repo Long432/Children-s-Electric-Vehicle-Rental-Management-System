@@ -27,11 +27,11 @@ public class Vehicle extends Timestamped {
 
     public Vehicle(String slug) {
         this.slug = slug;
-        this.status = VehicleStatus.Offline;
     }
 
     public void setSlug(String slug) {
         this.slug = slug;
+        this.setUpdatedAt(LocalDateTime.now());
     }
 
     public void setStatus(VehicleStatus status) {

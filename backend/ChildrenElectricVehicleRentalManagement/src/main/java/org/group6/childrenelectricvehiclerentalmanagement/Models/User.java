@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.UserStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
 import java.time.LocalDateTime;
 
 @Getter
@@ -33,4 +35,16 @@ public class User extends Timestamped {
 
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
+
+    public User(String username, String passwordHash) {
+        this.username = username;
+        this.passwordHash = passwordHash;
+        this.status=UserStatus.Offline;
+        this.cookieHash = null;
+        this.cookieExpiresAt = null;
+        this.lastLoginAt = null;
+    }
+
+    public User() {
+    }
 }

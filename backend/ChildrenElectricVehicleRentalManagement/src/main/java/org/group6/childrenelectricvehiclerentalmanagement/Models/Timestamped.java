@@ -6,7 +6,6 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import lombok.Getter;
 import lombok.Setter;
-import org.group6.childrenelectricvehiclerentalmanagement.Utility.TimeUtil;
 
 import java.time.LocalDateTime;
 
@@ -22,13 +21,13 @@ public abstract class Timestamped {
 
     @PrePersist
     void onCreate() {
-        LocalDateTime now = TimeUtil.now();
+        LocalDateTime now = LocalDateTime.now();
         if (createdAt == null) createdAt = now;
         if (updatedAt == null) updatedAt = now;
     }
 
     @PreUpdate
     void onUpdate() {
-        updatedAt = TimeUtil.now();
+        updatedAt = LocalDateTime.now();
     }
 }

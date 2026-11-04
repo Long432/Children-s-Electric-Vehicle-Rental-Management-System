@@ -1,8 +1,12 @@
-package org.group6.childrenelectricvehiclerentalmanagement.Models;
+package org.group6.childrenelectricvehiclerentalmanagement.Models.LinkingObject;
 
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.group6.childrenelectricvehiclerentalmanagement.Models.Session;
+import org.group6.childrenelectricvehiclerentalmanagement.Models.Timestamped;
+import org.group6.childrenelectricvehiclerentalmanagement.Models.Vehicle;
+
 import java.time.LocalDateTime;
 
 @Getter
