@@ -65,7 +65,6 @@ public class AuthService {
 
         if (!passwordMatches) throw new AbstractException("login not success because invalid credentials",LOGIN_FAILED_CODE, LOGIN_FAILED_MESSAGE, 401);
         if (user.getStatus() == UserStatus.Deactivate) throw new UserDeactivated();
-        if (user.getStatus() == UserStatus.Online) throw new AbstractException("user is already logged in","LOGGED_IN","Người dùng hiện đang online",403);
 
         String rawCookie = jwtUtil.generateToken(user);
         String cookieHash;
