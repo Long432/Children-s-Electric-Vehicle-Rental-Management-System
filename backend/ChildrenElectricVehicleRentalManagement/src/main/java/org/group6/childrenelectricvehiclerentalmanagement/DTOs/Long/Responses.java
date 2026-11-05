@@ -21,7 +21,8 @@ public final class Responses {
                                  VehicleBrief vehicle, String paymentMethod, Integer totalMinutes,
                                  Integer amountPaid, String queuedAt, String startedAt, String dueAt,
                                  String returnedAt, Integer remainingMinutes, Integer overdueMinutes,
-                                 Integer chargeableOverdueMinutes, Integer overdueFee, Integer refundAmount) {}
+                                 Integer chargeableOverdueMinutes, Integer overdueFee, Integer refundAmount,
+                                 String cancelableAt) {}
     public record CreateTicketResponse(TicketResponse ticket, List<VehicleBrief> suggestedVehicles) {}
     public record TicketListResponse(List<TicketResponse> items, int total, Long sessionId) {}
     public record PaymentResponse(Long id, String type, String method, Integer amount, Integer minutes,

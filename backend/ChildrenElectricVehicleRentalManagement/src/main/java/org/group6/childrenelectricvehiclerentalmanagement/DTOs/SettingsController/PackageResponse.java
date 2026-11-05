@@ -1,23 +1,21 @@
 package org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsController;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.Getter;
+import org.group6.childrenelectricvehiclerentalmanagement.Models.Package;
 
-@Getter
-public class PackageResponse {
-    private final Long id;
-    private final int amount;
-    private final int minutes;
+public record PackageResponse(
+        Long id,
+        int amount,
+        int minutes,
+        @JsonProperty("is_default") boolean defaultPackage,
+        boolean active) {
 
-    // Tên trường Java khác "isDefault" để getter do Lombok sinh (isDefaultPackage) khớp tên trường,
-    // nếu không Jackson sẽ xuất thêm một khóa "default" thừa bên cạnh "is_default".
-    @JsonProperty("is_default")
-    private final boolean defaultPackage;
-
-    public PackageResponse(Long id, int amount, int minutes, boolean defaultPackage) {
-        this.id = id;
-        this.amount = amount;
-        this.minutes = minutes;
-        this.defaultPackage = defaultPackage;
+    public static PackageResponse from(Package pricePackage) {
+        return new PackageResponse(
+                pricePackage.getId(),
+                pricePackage.getAmount(),
+                pricePackage.getMinutes(),
+                Boolean.TRUE.equals(pricePackage.getIsDefault()),
+                Boolean.TRUE.equals(pricePackage.getActive()));
     }
 }
