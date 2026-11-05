@@ -27,6 +27,7 @@ public class Ticket extends Timestamped {
     @Column(name = "phone", nullable = false, length = Integer.MAX_VALUE)
     private String phone;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private TicketStatus status;
 
@@ -34,6 +35,7 @@ public class Ticket extends Timestamped {
     @JoinColumn(name = "vehicle_id")
     private Vehicle vehicle;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "payment_method", nullable = false)
     private PaymentMethod paymentMethod;
 
@@ -57,6 +59,13 @@ public class Ticket extends Timestamped {
 
     @Column(name = "refund_enabled", nullable = false)
     private Boolean refundEnabled;
+
+    @Column(name = "cancel_wait_minutes", nullable = false)
+    private Integer cancelWaitMinutes;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "package_id")
+    private Package pricePackage;
 
     @Column(name = "queued_at", nullable = false)
     private LocalDateTime queuedAt;
