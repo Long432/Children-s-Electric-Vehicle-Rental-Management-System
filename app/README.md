@@ -1,4 +1,4 @@
-# Ứng dụng quản lý thuê xe điện vui chơi (React Native + Expo)
+# Ứng dụng quản lý thuê xe điện trẻ em (React Native + Expo)
 
 ## Chạy thử
     npm install
@@ -20,15 +20,13 @@ Cài file .apk tạo ra lên điện thoại, rồi chạy `npx expo start --dev
 - Chuyển sang quảng cáo thật: tạo app và ad unit tại https://admob.google.com, thay mã vào 2 file trên, build lại.
   Không tự bấm vào quảng cáo thật của mình (dễ bị khóa tài khoản).
 
-Mặc định `USE_MOCK = true` trong `src/config.ts`: app chạy bằng dữ liệu giả, đăng nhập bằng tên và mật khẩu bất kỳ.
-
 ## Nối backend thật
-1. Đặt `USE_MOCK = false`, sửa `API_URL` thành IP máy chạy backend (không dùng localhost trên điện thoại thật).
-2. Backend cần làm API đăng nhập và trả `data.token` (giá trị cookie `SESSION_TOKEN`). App lưu token và gửi lại qua header `Cookie`.
-3. Hiện chỉ nhóm API Cài đặt có sẵn; dùng token `dev-token` (từ `Patch_01_settings.sql`) để thử.
+1. Chạy backend (PostgreSQL, các file trong `backend/DB`, `setup-local.ps1`, `mvnw spring-boot:run`) và tạo tài khoản đăng nhập bằng `Create_user.local.sql`.
+2. Sửa `BACKEND_URL` trong `src/api/backend.ts`: máy ảo Android dùng `http://10.0.2.2:8080`, điện thoại thật dùng `http://<IP Wi-Fi của máy tính>:8080`.
+3. Đăng nhập bằng tài khoản thật. App lưu JWT trong SecureStore và gửi qua header `Authorization: Bearer`.
 
 ## Cấu trúc
-- `src/api/` gọi API (`index.ts`), xử lý `{ok,data,error}` (`client.ts`), dữ liệu giả (`mock.ts`)
-- `src/types.ts` kiểu dữ liệu. Các response ngoài Settings là đề xuất, cần thống nhất với backend
+- `src/api/` gọi API (`index.ts`, có đổi dữ liệu backend sang kiểu của app), xử lý `{ok,data,error}` (`client.ts`)
+- `src/types.ts` kiểu dữ liệu mà các màn hình dùng
 - `src/screens/` 5 màn hình: Đăng nhập, Phiên, Vé, Xe, Cài đặt
 - `src/components/ui.tsx` thành phần dùng chung; `src/theme.ts` màu và cỡ chữ

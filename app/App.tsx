@@ -5,19 +5,21 @@ import { BottomTabBar, createBottomTabNavigator } from '@react-navigation/bottom
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from './src/auth';
+import { ClockProvider } from './src/clock';
 import LoginScreen from './src/screens/LoginScreen';
 import SessionScreen from './src/screens/SessionScreen';
 import TicketsScreen from './src/screens/TicketsScreen';
 import VehiclesScreen from './src/screens/VehiclesScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import { color } from './src/theme';
+import { initNotifications } from './src/notifications';
 import { AdBanner, canShowInterstitial, initAds, showInterstitialThen } from './src/ads';
 
 const Tab = createBottomTabNavigator();
 
 function Root() {
   const { state } = useAuth();
-  useEffect(() => { initAds(); }, []);
+  useEffect(() => { initAds(); initNotifications(); }, []);
   if (state === 'loading') return <View style={{ flex: 1, justifyContent: 'center' }}><ActivityIndicator /></View>;
   if (state === 'out') return <LoginScreen />;
   return (
@@ -43,5 +45,5 @@ function Root() {
 }
 
 export default function App() {
-  return <SafeAreaProvider><StatusBar style="dark" /><AuthProvider><Root /></AuthProvider></SafeAreaProvider>;
+  return <SafeAreaProvider><StatusBar style="dark" /><AuthProvider><ClockProvider><Root /></ClockProvider></AuthProvider></SafeAreaProvider>;
 }
