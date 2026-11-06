@@ -1,50 +1,34 @@
 package org.group6.childrenelectricvehiclerentalmanagement.Controllers;
 
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.AuthController.*;
-import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.AbstractException;
-import org.group6.childrenelectricvehiclerentalmanagement.Models.User;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.ApiResponse;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.Auth.LoginRequest;
 import org.group6.childrenelectricvehiclerentalmanagement.Services.AuthService;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatusCode;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.Security.AuthenticatedUser;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.web.header.Header;
-import org.springframework.stereotype.Controller;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.servlet.function.ServerRequest;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
-
-@Slf4j
-@Controller
-@RequestMapping(path = "/auth")
-@AllArgsConstructor
+@RestController
+@RequestMapping("/api/auth")
 public class AuthController extends BaseController {
+
     private final AuthService authService;
 
-    @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest request) throws Exception {
-        LoginResult result = authService.login(request);
-        LoginResponse response = new LoginResponse(result.user().id(), result.user().username(), result.user().status());
-        return ResponseEntity.ok().header("Authorization","Bearer "+result.cookieValue()).body(response);
+    public AuthController(AuthService authService) {
+        this.authService = authService;
     }
 
-    @PostMapping("/logout")
-    public ResponseEntity<?> logout(@AuthenticationPrincipal User actor) throws Exception {
-        authService.logout(actor);
-        return ResponseEntity.ok("Đăng xuất thành công");
+    @PostMapping("/login")
+    public ResponseEntity<ApiResponse> login(@RequestBody(required = false) LoginRequest request) throws Exception {
+        return ResponseEntity.ok(ApiResponse.success(authService.login(request)));
     }
 
     @GetMapping("/me")
-    public ResponseEntity<?> me(@AuthenticationPrincipal User actor) throws Exception {
-        return ResponseEntity.ok(authService.getMe(actor));
-    }
-
-    @PostMapping("/signup")
-    public ResponseEntity<?> signup(@RequestBody SignUpRequest request) throws Exception {
-        return ResponseEntity.ok(new MeResponse(authService.signUp(request)));
+    public ResponseEntity<ApiResponse> me(@AuthenticationPrincipal AuthenticatedUser actor) throws Exception {
+        return ResponseEntity.ok(ApiResponse.success(authService.getProfile(actor)));
     }
 }
