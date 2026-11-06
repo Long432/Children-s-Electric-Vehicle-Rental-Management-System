@@ -5,25 +5,25 @@ import lombok.Getter;
 import lombok.Setter;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.PaymentType;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.PaymentMethod;
+import org.hibernate.annotations.ColumnDefault;
+
 import java.time.LocalDateTime;
 
 @Getter
 @Setter
 @Entity
 @Table(name = "payments")
-public class Payment extends Timestamped {
+public class Payment {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "session_id", nullable = false)
-    private Session session;
+    @Column(name = "session_id", nullable = false)
+    private Long sessionId;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "ticket_id", nullable = false)
-    private Ticket ticket;
+    @Column(name = "ticket_id", nullable = false)
+    private Long ticketId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false)
@@ -43,22 +43,9 @@ public class Payment extends Timestamped {
     @JoinColumn(name = "created_by", nullable = false)
     private User createdBy;
 
-    public Payment(Session session, Ticket ticket, User createdBy) {
-        this.session = session;
-        this.ticket = ticket;
-        this.type = PaymentType.Ticket;
-        this.method = ticket.getPaymentMethod();
-        this.createdBy = createdBy;
-    }
-    public Payment(Session session, Ticket ticket, PaymentMethod method, User createdBy) {
-        this.session = session;
-        this.ticket = ticket;
-        this.type = PaymentType.Ticket;
-        this.method = method;
-        this.createdBy = createdBy;
-    }
+    @ColumnDefault("now()")
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
 
-    public Payment() {
 
-    }
 }

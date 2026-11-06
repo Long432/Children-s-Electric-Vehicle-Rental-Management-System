@@ -4,7 +4,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.UserStatus;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.hibernate.annotations.Audited;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.time.LocalDateTime;
 
@@ -12,7 +13,7 @@ import java.time.LocalDateTime;
 @Setter
 @Entity
 @Table(name = "users")
-public class User extends Timestamped {
+public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false)
@@ -24,6 +25,8 @@ public class User extends Timestamped {
     @Column(name = "password_hash", nullable = false, length = Integer.MAX_VALUE)
     private String passwordHash;
 
+    @ColumnDefault("'Offline'")
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private UserStatus status;
 
@@ -36,15 +39,13 @@ public class User extends Timestamped {
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
 
-    public User(String username, String passwordHash) {
-        this.username = username;
-        this.passwordHash = passwordHash;
-        this.status=UserStatus.Offline;
-        this.cookieHash = null;
-        this.cookieExpiresAt = null;
-        this.lastLoginAt = null;
-    }
+    @ColumnDefault("now()")
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
 
-    public User() {
-    }
+    @ColumnDefault("now()")
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+
+
 }

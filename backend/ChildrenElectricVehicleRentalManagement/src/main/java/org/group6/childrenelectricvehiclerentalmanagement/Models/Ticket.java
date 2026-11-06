@@ -5,21 +5,22 @@ import lombok.Getter;
 import lombok.Setter;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.TicketStatus;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.PaymentMethod;
+import org.hibernate.annotations.ColumnDefault;
+
 import java.time.LocalDateTime;
 
 @Getter
 @Setter
 @Entity
 @Table(name = "tickets")
-public class Ticket extends Timestamped {
+public class Ticket {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "session_id", nullable = false)
-    private Session session;
+    @Column(name = "session_id", nullable = false)
+    private Long sessionId;
 
     @Column(name = "ticket_no", nullable = false)
     private Integer ticketNo;
@@ -27,6 +28,7 @@ public class Ticket extends Timestamped {
     @Column(name = "phone", nullable = false, length = Integer.MAX_VALUE)
     private String phone;
 
+    @ColumnDefault("'Waiting'")
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private TicketStatus status;
@@ -60,13 +62,6 @@ public class Ticket extends Timestamped {
     @Column(name = "refund_enabled", nullable = false)
     private Boolean refundEnabled;
 
-    @Column(name = "cancel_wait_minutes", nullable = false)
-    private Integer cancelWaitMinutes;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "package_id")
-    private Package pricePackage;
-
     @Column(name = "queued_at", nullable = false)
     private LocalDateTime queuedAt;
 
@@ -79,14 +74,17 @@ public class Ticket extends Timestamped {
     @Column(name = "returned_at")
     private LocalDateTime returnedAt;
 
+    @ColumnDefault("0")
     @Column(name = "overdue_minutes", nullable = false)
-    private Integer overdueMinutes = 0;
+    private Integer overdueMinutes;
 
+    @ColumnDefault("0")
     @Column(name = "overdue_fee", nullable = false)
-    private Integer overdueFee = 0;
+    private Integer overdueFee;
 
+    @ColumnDefault("0")
     @Column(name = "refund_amount", nullable = false)
-    private Integer refundAmount = 0;
+    private Integer refundAmount;
 
     @Column(name = "canceled_at")
     private LocalDateTime canceledAt;
@@ -94,4 +92,14 @@ public class Ticket extends Timestamped {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "created_by", nullable = false)
     private User createdBy;
+
+    @ColumnDefault("now()")
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+
+    @ColumnDefault("now()")
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+
+
 }

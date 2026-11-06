@@ -1,125 +1,111 @@
 package org.group6.childrenelectricvehiclerentalmanagement.Services;
 
-import lombok.RequiredArgsConstructor;
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.AuthController.*;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.Auth.LoginRequest;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.Auth.LoginResponse;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.Auth.UserResponse;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.UserStatus;
-import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.*;
+import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.AbstractException;
+import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.AccountDeactivatedException;
+import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.InvalidCredentialsException;
+import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.UnauthorizedException;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.User;
+import org.group6.childrenelectricvehiclerentalmanagement.Models.UserToken;
 import org.group6.childrenelectricvehiclerentalmanagement.Repositories.UserRepository;
-import org.group6.childrenelectricvehiclerentalmanagement.Utility.Config.CookieEncoder;
+import org.group6.childrenelectricvehiclerentalmanagement.Repositories.UserTokenRepository;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.HashUtil;
 import org.group6.childrenelectricvehiclerentalmanagement.Utility.JwtUtil;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.Security.AuthenticatedUser;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.TimeUtil;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.Validators.LoginRequestValidator;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
-import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.Base64;
+import java.time.ZoneOffset;
+import java.util.Objects;
+import java.util.Optional;
 
 @Service
-@RequiredArgsConstructor
 public class AuthService {
 
-    private static final boolean SESSION_REPLACE_EXISTING = true;
-    private static final int COOKIE_MAX_AGE_DAYS = 30;
-    private static final String LOGIN_FAILED_CODE = "INVALID_CREDENTIALS";
-    private static final String LOGIN_FAILED_MESSAGE = "Thông tin đăng nhập không đúng";
-
-    public User GetUser(long id) throws Exception {
-        return userRepository.findById(id).orElseThrow(() -> new UserNotExitsException(id));
-    }
-
-    public User GetUser(int id) throws Exception {
-        return this.GetUser(Long.parseLong(String.valueOf(id)));
-    }
+    private static final LoginRequestValidator LOGIN_VALIDATOR = new LoginRequestValidator();
 
     private final UserRepository userRepository;
+    private final UserTokenRepository userTokenRepository;
     private final PasswordEncoder passwordEncoder;
-    private final CookieEncoder cookieEncoder;
     private final JwtUtil jwtUtil;
+    private final String unknownUserHash;
 
-    @Transactional
-    public User signUp(SignUpRequest request) throws Exception{
-        return userRepository.save(new User(request.username(), passwordEncoder.encode(request.password())));
+    public AuthService(UserRepository userRepository, UserTokenRepository userTokenRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil) {
+        this.userRepository = userRepository;
+        this.userTokenRepository = userTokenRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtUtil = jwtUtil;
+        this.unknownUserHash = passwordEncoder.encode("khong-ton-tai");
     }
 
-    @Transactional
-    public LoginResult login(LoginRequest request) throws Exception {
-        String username = request.username() == null ? null : request.username().trim();
-        String password = request.password();
-
-        if (username == null || username.isBlank() || password == null || password.isBlank()) throw new AbstractException("login not success because user or password is empty","EMPTY_FIELD", "Vui lòng nhập username và mật khẩu", 401);
-
-        User user = userRepository.findByUsername(username).orElseThrow(()->new UserNotExitsException(request.username()));
-
-        boolean passwordMatches;
-        try {
-            passwordMatches = passwordEncoder.matches(password, user.getPasswordHash());
-        } catch (Exception e) {
-            passwordMatches = false;
+    @Transactional(rollbackFor = Exception.class)
+    public LoginResponse login(LoginRequest request) throws AbstractException {
+        LOGIN_VALIDATOR.validate(request);
+        Optional<User> found = userRepository.findByUsername(request.username().trim());
+        if (found.isEmpty()) {
+            passwordEncoder.matches(request.password(), unknownUserHash);
+            throw new InvalidCredentialsException();
         }
-
-        if (!passwordMatches) throw new AbstractException("login not success because invalid credentials",LOGIN_FAILED_CODE, LOGIN_FAILED_MESSAGE, 401);
-        if (user.getStatus() == UserStatus.Deactivate) throw new UserDeactivated();
-
-        String rawCookie = jwtUtil.generateToken(user);
-        String cookieHash;
-        try {
-            cookieHash = cookieEncoder.encode(rawCookie);
-        } catch (NoSuchAlgorithmException e) {
-            throw new AbstractException("COOKEN_ERROR","COOKEN_ERROR", "Không thể tạo phiên đăng nhập", 500);
+        User user = found.get();
+        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            throw new InvalidCredentialsException();
         }
-
-        LocalDateTime expiresAt = LocalDateTime.now().plus(Duration.ofMillis(jwtUtil.expirationMs()));
-
-        user.setCookieHash(cookieHash);
-        user.setCookieExpiresAt(expiresAt);
-        user.setLastLoginAt(LocalDateTime.now());
-        user.setUpdatedAt(LocalDateTime.now());
+        if (user.getStatus() == UserStatus.Deactivate) {
+            throw new AccountDeactivatedException();
+        }
+        JwtUtil.IssuedToken token = jwtUtil.issue(user.getId(), user.getUsername());
+        LocalDateTime now = TimeUtil.nowUtc();
+        LocalDateTime expiresAt = LocalDateTime.ofInstant(token.expiresAt(), ZoneOffset.UTC);
+        userTokenRepository.deleteExpiredByUserId(user.getId(), now);
+        userTokenRepository.save(new UserToken(user.getId(), HashUtil.sha256Hex(token.value()), expiresAt, now));
         user.setStatus(UserStatus.Online);
-
+        user.setCookieHash(null);
+        user.setCookieExpiresAt(null);
+        user.setLastLoginAt(now);
+        user.setUpdatedAt(now);
         userRepository.save(user);
-
-        LoginResponse response = new LoginResponse(userRepository.save(user));
-        int maxAgeSeconds = (int) Duration.between(LocalDateTime.now(), expiresAt).getSeconds();
-
-        return new LoginResult(response, rawCookie, maxAgeSeconds);
+        return new LoginResponse(token.value(), TimeUtil.toIsoUtc(expiresAt), UserResponse.from(user));
     }
 
-    @Transactional(readOnly = true)
-    public MeResponse getMe(User actor) throws Exception {
-        if (actor.getStatus()==UserStatus.Offline) throw new UserLoggedOut();
-        if (actor.getStatus()==UserStatus.Deactivate) throw new UserDeactivated();
-
-        return new MeResponse(actor);
+    @Transactional(readOnly = true, rollbackFor = Exception.class)
+    public AuthenticatedUser authenticate(String token) throws UnauthorizedException {
+        long userId = jwtUtil.parseUserId(token).orElseThrow(UnauthorizedException::new);
+        String tokenHash = HashUtil.sha256Hex(token);
+        UserToken stored = userTokenRepository.findByTokenHash(tokenHash).orElseThrow(UnauthorizedException::new);
+        if (!Objects.equals(stored.getUserId(), userId) || !stored.getExpiresAt().isAfter(TimeUtil.nowUtc())) {
+            throw new UnauthorizedException();
+        }
+        User user = userRepository.findById(userId).orElseThrow(UnauthorizedException::new);
+        if (user.getStatus() == UserStatus.Deactivate) {
+            throw new UnauthorizedException();
+        }
+        return new AuthenticatedUser(user.getId(), user.getUsername(), tokenHash);
     }
 
-    @Transactional
-    public void logout(User actor) throws Exception {
-        if (actor.getStatus()==UserStatus.Offline) throw new UserLoggedOut();
-        if (actor.getStatus()==UserStatus.Deactivate) throw new UserDeactivated();
-
-        actor.setCookieHash(null);
-        actor.setCookieExpiresAt(null);
-        actor.setStatus(UserStatus.Offline);
-        actor.setUpdatedAt(LocalDateTime.now());
-        userRepository.save(actor);
+    @Transactional(readOnly = true, rollbackFor = Exception.class)
+    public UserResponse getProfile(AuthenticatedUser actor) throws UnauthorizedException {
+        User user = userRepository.findById(actor.id()).orElseThrow(UnauthorizedException::new);
+        return UserResponse.from(user);
     }
 
-//    private void applyLoginPolicy(User user) throws Exception {
-//        if (SESSION_REPLACE_EXISTING) {
-//            return;
-//        }
-//    }
-
-//    private void dummyPasswordMatch(String password) {
-//        try {
-//            String dummyHash = "$2a$10$abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHI";
-//            passwordEncoder.matches(password, dummyHash);
-//        } catch (Exception ignored) {}
-//    }
+    @Transactional(rollbackFor = Exception.class)
+    public void logout(AuthenticatedUser actor) throws UnauthorizedException {
+        if (actor.tokenHash() != null) {
+            userTokenRepository.deleteByTokenHash(actor.tokenHash());
+        }
+        User user = userRepository.findById(actor.id()).orElseThrow(UnauthorizedException::new);
+        LocalDateTime now = TimeUtil.nowUtc();
+        if (user.getStatus() == UserStatus.Online && !userTokenRepository.existsByUserIdAndExpiresAtAfter(user.getId(), now)) {
+            user.setStatus(UserStatus.Offline);
+            user.setUpdatedAt(now);
+            userRepository.save(user);
+        }
+    }
 }

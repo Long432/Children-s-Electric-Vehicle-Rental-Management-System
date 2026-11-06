@@ -1,501 +1,238 @@
 package org.group6.childrenelectricvehiclerentalmanagement.Services;
 
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.Long.Requests;
-import org.group6.childrenelectricvehiclerentalmanagement.DTOs.Long.Responses;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.PageResponse;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsResponse;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.Ticket.CreateTicketRequest;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.Ticket.CreateTicketResponse;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.Ticket.OverdueTicketResponse;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.Ticket.QueueTicketResponse;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.Ticket.TicketListQuery;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.Ticket.TicketOverdueResponse;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.Ticket.TicketQueueResponse;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.Ticket.TicketResponse;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.Ticket.TicketSearchQuery;
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.Ticket.TicketVehicleResponse;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.PaymentMethod;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.PaymentType;
-import org.group6.childrenelectricvehiclerentalmanagement.Enum.ReleasedVehicleStatus;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.SessionStatus;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.TicketStatus;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.VehicleStatus;
-import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.*;
-import org.group6.childrenelectricvehiclerentalmanagement.Models.Package;
+import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.AbstractException;
+import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.BelowMinimumTimeException;
+import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.NoActiveSessionException;
+import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.SessionNotExits;
+import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.TicketNotExits;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Payment;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Session;
-import org.group6.childrenelectricvehiclerentalmanagement.Models.Settings;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Ticket;
-import org.group6.childrenelectricvehiclerentalmanagement.Models.LinkingObject.TicketVehicleHistory;
-import org.group6.childrenelectricvehiclerentalmanagement.Models.User;
-import org.group6.childrenelectricvehiclerentalmanagement.Models.Vehicle;
-import org.group6.childrenelectricvehiclerentalmanagement.Repositories.PackageRepository;
 import org.group6.childrenelectricvehiclerentalmanagement.Repositories.PaymentRepository;
-import org.group6.childrenelectricvehiclerentalmanagement.Repositories.SessionRepository;
-import org.group6.childrenelectricvehiclerentalmanagement.Repositories.SessionVehicleRepository;
+import org.group6.childrenelectricvehiclerentalmanagement.Repositories.SesssionRepository;
 import org.group6.childrenelectricvehiclerentalmanagement.Repositories.TicketRepository;
-import org.group6.childrenelectricvehiclerentalmanagement.Repositories.TicketVehicleHistoryRepository;
 import org.group6.childrenelectricvehiclerentalmanagement.Repositories.UserRepository;
 import org.group6.childrenelectricvehiclerentalmanagement.Repositories.VehicleRepository;
-import org.group6.childrenelectricvehiclerentalmanagement.Utility.*;
-import lombok.RequiredArgsConstructor;
-import org.group6.childrenelectricvehiclerentalmanagement.Utility.Validators.*;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.BusinessTime;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.Security.AuthenticatedUser;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.TicketPricing;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.Validators.CreateTicketRequestValidator;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.Validators.PageRules;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.Validators.TicketListQueryValidator;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.Validators.TicketSearchQueryValidator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 @Service
-@RequiredArgsConstructor
 public class TicketService {
-    private static final int SUGGESTED_VEHICLE_LIMIT = 5;
 
+    private static final String ENTITY_TYPE = "ticket";
+    private static final int SEARCH_LIMIT = 50;
+
+    private static final CreateTicketRequestValidator CREATE_VALIDATOR = new CreateTicketRequestValidator();
+    private static final TicketListQueryValidator LIST_VALIDATOR = new TicketListQueryValidator();
+    private static final TicketSearchQueryValidator SEARCH_VALIDATOR = new TicketSearchQueryValidator();
+
+    private final SesssionRepository sessionRepository;
     private final TicketRepository ticketRepository;
-    private final SessionRepository sessionRepository;
-    private final SessionVehicleRepository sessionVehicleRepository;
-    private final VehicleRepository vehicleRepository;
     private final PaymentRepository paymentRepository;
-    private final TicketVehicleHistoryRepository historyRepository;
-    private final PackageRepository packageRepository;
+    private final VehicleRepository vehicleRepository;
     private final UserRepository userRepository;
     private final SettingsService settingsService;
+    private final AuditLogService auditLogService;
+    private final BusinessTime businessTime;
+
+    public TicketService(SesssionRepository sessionRepository,
+                         TicketRepository ticketRepository,
+                         PaymentRepository paymentRepository,
+                         VehicleRepository vehicleRepository,
+                         UserRepository userRepository,
+                         SettingsService settingsService,
+                         AuditLogService auditLogService,
+                         BusinessTime businessTime) {
+        this.sessionRepository = sessionRepository;
+        this.ticketRepository = ticketRepository;
+        this.paymentRepository = paymentRepository;
+        this.vehicleRepository = vehicleRepository;
+        this.userRepository = userRepository;
+        this.settingsService = settingsService;
+        this.auditLogService = auditLogService;
+        this.businessTime = businessTime;
+    }
 
     @Transactional(rollbackFor = Exception.class)
-    public Responses.CreateTicketResponse createTicket(Requests.CreateTicketRequest request) throws Exception {
-        String phone = PhoneValidator.validate(request.getPhone());
-        int minutes = MinutesValidator.validatePositive("minutes", request.getMinutes());
-        PaymentMethod method = PaymentMethodValidator.validate(request.getPaymentMethod());
-
-        Settings settings = settingsService.loadSettings();
+    public CreateTicketResponse create(AuthenticatedUser actor, CreateTicketRequest request) throws AbstractException {
+        CREATE_VALIDATOR.validate(request);
+        String phone = request.phone().trim();
+        int minutes = request.minutes();
+        PaymentMethod method = PaymentMethod.valueOf(request.payment_method().trim());
+        Session session = sessionRepository.findByStatusForUpdate(SessionStatus.InProgress).orElseThrow(NoActiveSessionException::new);
+        SettingsResponse settings = settingsService.getSettings();
         if (minutes < settings.getMinimumMinutes()) {
-            throw new BelowMinimumTime("Thời gian thuê tối thiểu là " + settings.getMinimumMinutes() + " phút");
+            throw new BelowMinimumTimeException(settings.getMinimumMinutes());
         }
-
-        Session session = sessionRepository.lockByStatus(SessionStatus.InProgress).stream().findFirst()
-                .orElseThrow(NoActiveSession::new);
-
-        List<Package> packages = packageRepository.findByActiveTrueOrderByMinutesAsc();
-        Package defaultPackage = packages.stream().filter(p -> Boolean.TRUE.equals(p.getIsDefault())).findFirst()
-                .orElseThrow(NoPricePackage::new);
-        Package matchedPackage = packages.stream().filter(p -> p.getMinutes() == minutes).findFirst().orElse(null);
-
-        int price = matchedPackage != null
-                ? matchedPackage.getAmount()
-                : PricingUtil.priceByRate(minutes, defaultPackage.getAmount(), defaultPackage.getMinutes());
-        LocalDateTime now = TimeUtil.now();
-        User actor = userRepository.getReferenceById(request.getActorId());
+        TicketPricing.Quote quote = TicketPricing.quote(minutes, settings.getPackages());
+        LocalDateTime now = businessTime.nowUtc();
+        int ticketNo = session.getNextTicketNo();
 
         Ticket ticket = new Ticket();
-        ticket.setSession(session);
-        ticket.setTicketNo(session.getNextTicketNo());
+        ticket.setSessionId(session.getId());
+        ticket.setTicketNo(ticketNo);
         ticket.setPhone(phone);
         ticket.setStatus(TicketStatus.Waiting);
-        ticket.setVehicle(null);
         ticket.setPaymentMethod(method);
         ticket.setTotalMinutes(minutes);
-        ticket.setAmountPaid(price);
-        ticket.setPricePackage(matchedPackage);
-        ticket.setPriceAmount(defaultPackage.getAmount());
-        ticket.setPriceMinutes(defaultPackage.getMinutes());
+        ticket.setAmountPaid(quote.amount());
+        ticket.setPriceAmount(quote.priceAmount());
+        ticket.setPriceMinutes(quote.priceMinutes());
         ticket.setOverdueFeePerMinute(settings.getOverdueFeePerMinute());
         ticket.setOverdueGraceMinutes(settings.getOverdueGraceMinutes());
-        ticket.setRefundEnabled(settings.getRefundEnabled());
-        ticket.setCancelWaitMinutes(settings.getCancelWaitMinutes());
+        ticket.setRefundEnabled(settings.isRefundEnabled());
         ticket.setQueuedAt(now);
-        ticket.setCreatedBy(actor);
-        ticketRepository.save(ticket);
+        ticket.setOverdueMinutes(0);
+        ticket.setOverdueFee(0);
+        ticket.setRefundAmount(0);
+        ticket.setCreatedBy(userRepository.getReferenceById(actor.id()));
+        ticket.setCreatedAt(now);
+        ticket.setUpdatedAt(now);
+        Ticket saved = ticketRepository.saveAndFlush(ticket);
 
-        session.setNextTicketNo(session.getNextTicketNo() + 1);
+        session.setNextTicketNo(ticketNo + 1);
+        session.setUpdatedAt(now);
         sessionRepository.save(session);
 
-        recordPayment(session, ticket, PaymentType.Ticket, method, price, minutes, actor);
-
-        List<Responses.VehicleBrief> suggested = sessionVehicleRepository
-                .findBySessionIdAndRemovedAtIsNull(session.getId()).stream()
-                .map(sv -> sv.getVehicle())
-                .filter(v -> v.getDeletedAt() == null && v.getStatus() == VehicleStatus.Online)
-                .limit(SUGGESTED_VEHICLE_LIMIT)
-                .map(this::toVehicleBrief)
-                .toList();
-
-        return new Responses.CreateTicketResponse(toResponse(ticket, now), suggested);
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    public Responses.PageResponse<Responses.TicketResponse> listTickets(Requests.ListTicketsRequest request)
-            throws Exception {
-        Long sessionId = IdValidator.validateOptional("session_id", request.getSessionId());
-        TicketStatus status = TicketStatusValidator.validateOptional(request.getStatus());
-        PageParams params = PageValidator.validate(request.getPage(), request.getLimit());
-
-        Optional<Session> session = resolveSession(sessionId);
-        if (session.isEmpty()) {
-            return new Responses.PageResponse<>(List.of(), params.page(), params.limit(), 0, 0, null);
-        }
-        LocalDateTime now = TimeUtil.now();
-        refreshOverdueIfRunning(session.get(), now);
-
-        Pageable pageable = PageRequest.of(params.page() - 1, params.limit(), Sort.by(Sort.Direction.DESC, "id"));
-        Page<Ticket> page = status == null
-                ? ticketRepository.findBySessionId(session.get().getId(), pageable)
-                : ticketRepository.findBySessionIdAndStatus(session.get().getId(), status, pageable);
-
-        List<Responses.TicketResponse> items = page.getContent().stream().map(t -> toResponse(t, now)).toList();
-        return new Responses.PageResponse<>(items, params.page(), params.limit(), page.getTotalElements(),
-                page.getTotalPages(), session.get().getId());
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    public Responses.TicketListResponse searchTickets(Requests.SearchTicketsRequest request) throws Exception {
-        String q = SearchQueryValidator.validate(request.getQ());
-        Long sessionId = IdValidator.validateOptional("session_id", request.getSessionId());
-
-        Optional<Session> session = resolveSession(sessionId);
-        if (session.isEmpty()) {
-            return new Responses.TicketListResponse(List.of(), 0, null);
-        }
-        LocalDateTime now = TimeUtil.now();
-        refreshOverdueIfRunning(session.get(), now);
-
-        Map<Long, Ticket> found = new LinkedHashMap<>();
-        for (Ticket t : ticketRepository.findBySessionIdAndPhoneContainingOrderByIdDesc(session.get().getId(), q)) {
-            found.put(t.getId(), t);
-        }
-        if (q.length() <= 9 && q.chars().allMatch(Character::isDigit)) {
-            for (Ticket t : ticketRepository.findBySessionIdAndTicketNo(session.get().getId(), Integer.parseInt(q))) {
-                found.putIfAbsent(t.getId(), t);
-            }
-        }
-        List<Responses.TicketResponse> items = found.values().stream().map(t -> toResponse(t, now)).toList();
-        return new Responses.TicketListResponse(items, items.size(), session.get().getId());
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    public Responses.TicketListResponse getQueue(Requests.BaseRequest request) throws Exception {
-        Optional<Session> session = resolveSession(null);
-        if (session.isEmpty()) {
-            return new Responses.TicketListResponse(List.of(), 0, null);
-        }
-        LocalDateTime now = TimeUtil.now();
-        List<Responses.TicketResponse> items = ticketRepository
-                .findBySessionIdAndStatusOrderByQueuedAtAscIdAsc(session.get().getId(), TicketStatus.Waiting).stream()
-                .map(t -> toResponse(t, now)).toList();
-        return new Responses.TicketListResponse(items, items.size(), session.get().getId());
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    public Responses.TicketListResponse getOverdue(Requests.BaseRequest request) throws Exception {
-        Optional<Session> session = resolveSession(null);
-        if (session.isEmpty()) {
-            return new Responses.TicketListResponse(List.of(), 0, null);
-        }
-        LocalDateTime now = TimeUtil.now();
-        refreshOverdueIfRunning(session.get(), now);
-        List<Responses.TicketResponse> items = ticketRepository
-                .findBySessionIdAndStatusOrderByDueAtAsc(session.get().getId(), TicketStatus.Overdue).stream()
-                .map(t -> toResponse(t, now)).toList();
-        return new Responses.TicketListResponse(items, items.size(), session.get().getId());
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    public Responses.TicketDetailResponse getTicket(Requests.TicketIdRequest request) throws Exception {
-        Long id = IdValidator.validate("id", request.getId());
-        Ticket ticket = ticketRepository.findById(id).orElseThrow(TicketNotFound::new);
-        LocalDateTime now = TimeUtil.now();
-        refreshOverdueIfRunning(ticket.getSession(), now);
-
-        List<Responses.PaymentResponse> payments = paymentRepository.findByTicketIdOrderByIdAsc(id).stream()
-                .map(p -> new Responses.PaymentResponse(p.getId(), p.getType().name(), p.getMethod().name(),
-                        p.getAmount(), p.getMinutes(), TimeUtil.iso(p.getCreatedAt())))
-                .toList();
-        List<Responses.VehicleHistoryResponse> history = historyRepository.findByTicketIdOrderByIdAsc(id).stream()
-                .map(h -> new Responses.VehicleHistoryResponse(toVehicleBrief(h.getVehicle()),
-                        TimeUtil.iso(h.getAssignedAt()), TimeUtil.iso(h.getReleasedAt()),
-                        h.getReleasedStatus()))
-                .toList();
-        return new Responses.TicketDetailResponse(toResponse(ticket, now), payments, history);
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    public Responses.TicketResponse assignVehicle(Requests.AssignVehicleRequest request) throws Exception {
-        Long id = IdValidator.validate("id", request.getId());
-        String slug = VehicleSlugValidator.validate(request.getVehicleSlug());
-
-        Ticket ticket = lockTicket(id);
-        requireSessionRunning(ticket);
-        if (ticket.getStatus() != TicketStatus.Waiting) {
-            throw new TicketNotAssignable();
-        }
-        Vehicle vehicle = requireAvailableVehicle(slug, ticket.getSession());
-
-        LocalDateTime now = TimeUtil.now();
-        vehicle.setStatus(VehicleStatus.Inused);
-        vehicleRepository.save(vehicle);
-
-        ticket.setVehicle(vehicle);
-        ticket.setStatus(TicketStatus.Inused);
-        ticket.setStartedAt(now);
-        ticket.setDueAt(now.plusMinutes(ticket.getTotalMinutes()));
-        ticketRepository.save(ticket);
-
-        openHistory(ticket, vehicle, now);
-        return toResponse(ticket, now);
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    public Responses.CancelTicketResponse cancelTicket(Requests.CancelTicketRequest request) throws Exception {
-        Long id = IdValidator.validate("id", request.getId());
-        PaymentMethod refundMethod = PaymentMethodValidator.validateOptional(request.getRefundMethod());
-
-        Ticket ticket = lockTicket(id);
-        requireSessionRunning(ticket);
-        if (ticket.getStatus() != TicketStatus.Waiting) {
-            throw new TicketNotCancelable();
-        }
-        LocalDateTime now = TimeUtil.now();
-        LocalDateTime cancelableAt = ticket.getQueuedAt().plusMinutes(ticket.getCancelWaitMinutes());
-        if (now.isBefore(cancelableAt)) {
-            throw new CancelTooEarly(PricingUtil.minutesUntil(cancelableAt, now));
-        }
-        User actor = userRepository.getReferenceById(request.getActorId());
-        PaymentMethod method = refundMethod != null ? refundMethod : ticket.getPaymentMethod();
-
-        int refund = ticket.getAmountPaid();
-        ticket.setStatus(TicketStatus.Canceled);
-        ticket.setCanceledAt(now);
-        ticket.setRefundAmount(refund);
-        ticketRepository.save(ticket);
-
-        if (refund > 0) {
-            recordPayment(ticket.getSession(), ticket, PaymentType.Refund, method, refund, ticket.getTotalMinutes(), actor);
-        }
-        return new Responses.CancelTicketResponse(ticket.getId(), ticket.getTicketNo(), ticket.getStatus().name(),
-                refund, method.name());
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    public Responses.ChangeVehicleResponse changeVehicle(Requests.ChangeVehicleRequest request)
-            throws Exception {
-        Long id = IdValidator.validate("id", request.getId());
-        String slug = VehicleSlugValidator.validate(request.getVehicleSlug());
-        ReleasedVehicleStatus oldStatus = ReleasedVehicleStatusValidator.validate(request.getOldVehicleStatus());
-
-        Ticket ticket = lockTicket(id);
-        requireSessionRunning(ticket);
-        requireActive(ticket);
-        Vehicle oldVehicle = ticket.getVehicle();
-        if (oldVehicle != null && oldVehicle.getSlug().equals(slug)) {
-            throw new SameVehicle();
-        }
-        Vehicle newVehicle = requireAvailableVehicle(slug, ticket.getSession());
-
-        LocalDateTime now = TimeUtil.now();
-        closeHistory(ticket, now, oldStatus.name());
-        if (oldVehicle != null) {
-            oldVehicle.setStatus(VehicleStatus.valueOf(oldStatus.name()));
-            vehicleRepository.save(oldVehicle);
-        }
-        newVehicle.setStatus(VehicleStatus.Inused);
-        vehicleRepository.save(newVehicle);
-
-        ticket.setVehicle(newVehicle);
-        ticketRepository.save(ticket);
-        openHistory(ticket, newVehicle, now);
-
-        return new Responses.ChangeVehicleResponse(toResponse(ticket, now), toVehicleBrief(oldVehicle));
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    public Responses.ExtendTicketResponse extendTicket(Requests.ExtendTicketRequest request) throws Exception {
-        Long id = IdValidator.validate("id", request.getId());
-        int minutes = MinutesValidator.validatePositive("minutes", request.getMinutes());
-        PaymentMethod method = PaymentMethodValidator.validate(request.getPaymentMethod());
-
-        if (!Boolean.TRUE.equals(settingsService.loadSettings().getExtendEnabled())) {
-            throw new ExtendDisabled();
-        }
-        Ticket ticket = lockTicket(id);
-        requireSessionRunning(ticket);
-        requireActive(ticket);
-
-        LocalDateTime now = TimeUtil.now();
-        User actor = userRepository.getReferenceById(request.getActorId());
-        int price = PricingUtil.priceByRate(minutes, ticket.getPriceAmount(), ticket.getPriceMinutes());
-
-        ticket.setTotalMinutes(ticket.getTotalMinutes() + minutes);
-        ticket.setAmountPaid(ticket.getAmountPaid() + price);
-        ticket.setDueAt(ticket.getDueAt().plusMinutes(minutes));
-        if (ticket.getStatus() == TicketStatus.Overdue && ticket.getDueAt().isAfter(now)) {
-            ticket.setStatus(TicketStatus.Inused);
-        }
-        ticketRepository.save(ticket);
-
-        recordPayment(ticket.getSession(), ticket, PaymentType.Extension, method, price, minutes, actor);
-        return new Responses.ExtendTicketResponse(toResponse(ticket, now), minutes, price);
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    public Responses.ReturnTicketResponse returnTicket(Requests.ReturnTicketRequest request) throws Exception {
-        Long id = IdValidator.validate("id", request.getId());
-        PaymentMethod feeMethodInput = PaymentMethodValidator.validateOptional(request.getPaymentMethod());
-        PaymentMethod refundMethodInput = PaymentMethodValidator.validateOptional(request.getRefundMethod());
-
-        Ticket ticket = lockTicket(id);
-        requireSessionRunning(ticket);
-        requireActive(ticket);
-
-        LocalDateTime now = TimeUtil.now();
-        User actor = userRepository.getReferenceById(request.getActorId());
-
-        int overdueMinutes = PricingUtil.overdueMinutes(ticket.getDueAt(), now);
-        int chargeable = PricingUtil.chargeableMinutes(overdueMinutes, ticket.getOverdueGraceMinutes());
-        int fee = PricingUtil.overdueFee(chargeable, ticket.getOverdueFeePerMinute());
-
-        int refund = 0;
-        int remaining = 0;
-        if (overdueMinutes == 0 && Boolean.TRUE.equals(ticket.getRefundEnabled())) {
-            remaining = PricingUtil.remainingMinutes(ticket.getDueAt(), now);
-            refund = PricingUtil.refundForEarlyReturn(remaining, ticket.getPriceAmount(), ticket.getPriceMinutes(),
-                    ticket.getAmountPaid());
-        }
-
-        if (fee > 0) {
-            PaymentMethod feeMethod = feeMethodInput != null ? feeMethodInput : ticket.getPaymentMethod();
-            recordPayment(ticket.getSession(), ticket, PaymentType.OverdueFee, feeMethod, fee, chargeable, actor);
-        }
-        if (refund > 0) {
-            PaymentMethod refundMethod = refundMethodInput != null ? refundMethodInput : ticket.getPaymentMethod();
-            recordPayment(ticket.getSession(), ticket, PaymentType.Refund, refundMethod, refund, remaining, actor);
-        }
-
-        ticket.setStatus(TicketStatus.Completed);
-        ticket.setReturnedAt(now);
-        ticket.setOverdueMinutes(overdueMinutes);
-        ticket.setOverdueFee(fee);
-        ticket.setRefundAmount(refund);
-        ticketRepository.save(ticket);
-
-        Vehicle vehicle = ticket.getVehicle();
-        if (vehicle != null) {
-            vehicle.setStatus(VehicleStatus.Online);
-            vehicleRepository.save(vehicle);
-        }
-        closeHistory(ticket, now, ReleasedVehicleStatus.Online.name());
-
-        Responses.NextTicket next = ticketRepository
-                .findFirstBySessionIdAndStatusOrderByQueuedAtAscIdAsc(ticket.getSession().getId(), TicketStatus.Waiting)
-                .map(t -> new Responses.NextTicket(t.getTicketNo(), t.getPhone()))
-                .orElse(null);
-
-        return new Responses.ReturnTicketResponse(ticket.getId(), ticket.getTicketNo(), ticket.getStatus().name(),
-                overdueMinutes, chargeable, fee, refund, toVehicleBrief(vehicle), next);
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    public void refreshOverdueIfRunning(Session session, LocalDateTime now) {
-        if (session == null || session.getStatus() != SessionStatus.InProgress) {
-            return;
-        }
-        List<Ticket> late = ticketRepository.findBySessionIdAndStatusAndDueAtBefore(
-                session.getId(), TicketStatus.Inused, now);
-        if (late.isEmpty()) {
-            return;
-        }
-        for (Ticket t : late) {
-            t.setStatus(TicketStatus.Overdue);
-        }
-        ticketRepository.saveAll(late);
-    }
-
-    private Optional<Session> resolveSession(Long sessionId) throws Exception {
-        if (sessionId != null) {
-            Session session = sessionRepository.findById(sessionId)
-                    .orElseThrow(SessionNotFound::new);
-            return Optional.of(session);
-        }
-        return sessionRepository.findFirstByStatusOrderByIdDesc(SessionStatus.InProgress);
-    }
-
-    private Ticket lockTicket(Long id) throws Exception {
-        return ticketRepository.lockById(id).orElseThrow(TicketNotFound::new);
-    }
-
-    private void requireSessionRunning(Ticket ticket) throws SessionNotActive {
-        if (ticket.getSession().getStatus() != SessionStatus.InProgress) {
-            throw new SessionNotActive();
-        }
-    }
-
-    private void requireActive(Ticket ticket) throws TicketNotActive {
-        if (ticket.getStatus() != TicketStatus.Inused && ticket.getStatus() != TicketStatus.Overdue) {
-            throw new TicketNotActive();
-        }
-    }
-
-    private Vehicle requireAvailableVehicle(String slug, Session session) throws Exception {
-        Vehicle vehicle = vehicleRepository.lockBySlug(slug)
-                .orElseThrow(VehicleNotFound::new);
-        if (vehicle.getStatus() != VehicleStatus.Online) {
-            throw new VehicleNotAvailable();
-        }
-        if (!sessionVehicleRepository.existsBySessionIdAndVehicleIdAndRemovedAtIsNull(session.getId(), vehicle.getId())) {
-            throw new VehicleNotInSession();
-        }
-        return vehicle;
-    }
-
-    private void openHistory(Ticket ticket, Vehicle vehicle, LocalDateTime now) {
-        TicketVehicleHistory history = new TicketVehicleHistory();
-        history.setTicket(ticket);
-        history.setVehicle(vehicle);
-        history.setAssignedAt(now);
-        historyRepository.save(history);
-    }
-
-    private void closeHistory(Ticket ticket, LocalDateTime now, String releasedStatus) {
-        historyRepository.findFirstByTicketIdAndReleasedAtIsNull(ticket.getId()).ifPresent(h -> {
-            h.setReleasedAt(now);
-            h.setReleasedStatus(releasedStatus);
-            historyRepository.save(h);
-        });
-    }
-
-    private void recordPayment(Session session, Ticket ticket, PaymentType type, PaymentMethod method,
-                               int amount, Integer minutes, User actor) {
         Payment payment = new Payment();
-        payment.setSession(session);
-        payment.setTicket(ticket);
-        payment.setType(type);
+        payment.setSessionId(session.getId());
+        payment.setTicketId(saved.getId());
+        payment.setType(PaymentType.Ticket);
         payment.setMethod(method);
-        payment.setAmount(amount);
+        payment.setAmount(quote.amount());
         payment.setMinutes(minutes);
-        payment.setCreatedBy(actor);
+        payment.setCreatedBy(userRepository.getReferenceById(actor.id()));
+        payment.setCreatedAt(now);
         paymentRepository.save(payment);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("ticket_no", ticketNo);
+        payload.put("minutes", minutes);
+        payload.put("amount_paid", quote.amount());
+        payload.put("payment_method", method.name());
+        auditLogService.log(actor, "ticket.create", ENTITY_TYPE, saved.getId(), payload);
+
+        List<TicketVehicleResponse> suggested = vehicleRepository
+                .findByStatusAndSessionId(VehicleStatus.Online.name(), session.getId()).stream()
+                .map(TicketVehicleResponse::from)
+                .toList();
+        return new CreateTicketResponse(ticketNo, quote.amount(), TicketResponse.from(saved), suggested);
     }
 
-    private Responses.VehicleBrief toVehicleBrief(Vehicle vehicle) {
-        if (vehicle == null) {
-            return null;
-        }
-        return new Responses.VehicleBrief(vehicle.getId(), vehicle.getSlug(), vehicle.getStatus().name());
+    @Transactional(readOnly = true, rollbackFor = Exception.class)
+    public TicketResponse get(long id) throws AbstractException {
+        return TicketResponse.from(ticketRepository.findDetailById(id).orElseThrow(TicketNotExits::new));
     }
 
-    private Responses.TicketResponse toResponse(Ticket t, LocalDateTime now) {
-        boolean active = t.getStatus() == TicketStatus.Inused || t.getStatus() == TicketStatus.Overdue;
-        Integer remaining = null;
-        int overdueMinutes = t.getOverdueMinutes();
-        int fee = t.getOverdueFee();
-        if (active) {
-            remaining = PricingUtil.remainingMinutes(t.getDueAt(), now);
-            overdueMinutes = PricingUtil.overdueMinutes(t.getDueAt(), now);
-            fee = PricingUtil.overdueFee(
-                    PricingUtil.chargeableMinutes(overdueMinutes, t.getOverdueGraceMinutes()),
-                    t.getOverdueFeePerMinute());
+    @Transactional(readOnly = true, rollbackFor = Exception.class)
+    public PageResponse<TicketResponse> list(TicketListQuery query) throws AbstractException {
+        LIST_VALIDATOR.validate(query);
+        int page = PageRules.page(query.page());
+        int limit = PageRules.limit(query.limit());
+        Optional<Long> sessionId = resolveSessionId(query.session_id());
+        if (sessionId.isEmpty()) {
+            return PageResponse.empty(page, limit);
         }
-        int chargeable = PricingUtil.chargeableMinutes(overdueMinutes, t.getOverdueGraceMinutes());
-        String cancelableAt = t.getStatus() == TicketStatus.Waiting
-                ? TimeUtil.iso(t.getQueuedAt().plusMinutes(t.getCancelWaitMinutes()))
-                : null;
-        return new Responses.TicketResponse(
-                t.getId(), t.getTicketNo(), t.getPhone(), t.getStatus().name(), t.getSession().getId(),
-                toVehicleBrief(t.getVehicle()), t.getPaymentMethod().name(), t.getTotalMinutes(), t.getAmountPaid(),
-                TimeUtil.iso(t.getQueuedAt()), TimeUtil.iso(t.getStartedAt()), TimeUtil.iso(t.getDueAt()),
-                TimeUtil.iso(t.getReturnedAt()), remaining, overdueMinutes, chargeable, fee, t.getRefundAmount(),
-                cancelableAt);
+        Pageable pageable = PageRequest.of(page - 1, limit);
+        Page<Ticket> result = (query.status() == null || query.status().isBlank())
+                ? ticketRepository.findBySessionIdOrderByQueuedAtDescIdDesc(sessionId.get(), pageable)
+                : ticketRepository.findBySessionIdAndStatusOrderByQueuedAtDescIdDesc(sessionId.get(), TicketStatus.valueOf(query.status().trim()), pageable);
+        List<TicketResponse> items = result.getContent().stream().map(TicketResponse::from).toList();
+        return new PageResponse<>(items, page, limit, result.getTotalElements());
+    }
+
+    @Transactional(readOnly = true, rollbackFor = Exception.class)
+    public List<TicketResponse> search(TicketSearchQuery query) throws AbstractException {
+        SEARCH_VALIDATOR.validate(query);
+        Optional<Long> sessionId = resolveSessionId(query.session_id());
+        if (sessionId.isEmpty()) {
+            return List.of();
+        }
+        String value = query.q().trim();
+        List<Ticket> found = value.length() <= TicketSearchQueryValidator.MAX_TICKET_NO_DIGITS
+                ? ticketRepository.findBySessionIdAndTicketNo(sessionId.get(), Integer.parseInt(value))
+                : ticketRepository.searchByPhone(sessionId.get(), value, PageRequest.of(0, SEARCH_LIMIT));
+        return found.stream().map(TicketResponse::from).toList();
+    }
+
+    @Transactional(readOnly = true, rollbackFor = Exception.class)
+    public TicketQueueResponse queue() {
+        Optional<Session> session = sessionRepository.findFirstByStatus(SessionStatus.InProgress);
+        if (session.isEmpty()) {
+            return new TicketQueueResponse(null, 0, List.of());
+        }
+        List<Ticket> waiting = ticketRepository.findBySessionIdAndStatusOrderByQueuedAtAscIdAsc(session.get().getId(), TicketStatus.Waiting);
+        List<QueueTicketResponse> items = new ArrayList<>();
+        for (int index = 0; index < waiting.size(); index++) {
+            items.add(new QueueTicketResponse(index + 1, TicketResponse.from(waiting.get(index))));
+        }
+        return new TicketQueueResponse(session.get().getId(), items.size(), items);
+    }
+
+    @Transactional(readOnly = true)
+    public TicketOverdueResponse overdue() {
+        Optional<Session> session = sessionRepository.findFirstByStatus(SessionStatus.InProgress);
+        if (session.isEmpty()) {
+            return new TicketOverdueResponse(null, 0, List.of());
+        }
+        LocalDateTime now = businessTime.nowUtc();
+        List<OverdueTicketResponse> items = ticketRepository
+                .findOverdueTickets(session.get().getId(), TicketStatus.Overdue, TicketStatus.Inused, now).stream()
+                .map(ticket -> toOverdueItem(ticket, now))
+                .toList();
+        return new TicketOverdueResponse(session.get().getId(), items.size(), items);
+    }
+
+    private OverdueTicketResponse toOverdueItem(Ticket ticket, LocalDateTime now) {
+        long lateSeconds = ticket.getDueAt() == null ? 0 : Duration.between(ticket.getDueAt(), now).getSeconds();
+        int overdueMinutes = TicketPricing.overdueMinutes(lateSeconds);
+        int chargeableMinutes = TicketPricing.chargeableOverdueMinutes(overdueMinutes, ticket.getOverdueGraceMinutes());
+        int estimatedFee = TicketPricing.estimatedOverdueFee(chargeableMinutes, ticket.getOverdueFeePerMinute());
+        return new OverdueTicketResponse(TicketResponse.from(ticket), overdueMinutes, chargeableMinutes, estimatedFee);
+    }
+
+    private Optional<Long> resolveSessionId(Long requested) throws SessionNotExits {
+        if (requested != null) {
+            if (!sessionRepository.existsById(requested)) {
+                throw new SessionNotExits();
+            }
+            return Optional.of(requested);
+        }
+        return sessionRepository.findFirstByStatus(SessionStatus.InProgress).map(Session::getId);
     }
 }

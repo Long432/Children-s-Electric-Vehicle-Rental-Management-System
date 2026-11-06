@@ -1,79 +1,86 @@
 package org.group6.childrenelectricvehiclerentalmanagement.Utility.Filters;
 
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.ApiErrorWriter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
-
-@Component
-@Slf4j
 public class RatelimitFilter extends OncePerRequestFilter {
-    Map<String,bucket> bucketList = new HashMap<>();
 
-    private final static int MAXIMUM_REQUEST = 1; // đơn vị lần
-    private final static long WINDOW_SECOND= 5; // đơn vị giây
+    private static final int GENERAL_LIMIT = 30;
+    private static final long GENERAL_WINDOW_SECONDS = 10;
+    private static final int LOGIN_LIMIT = 10;
+    private static final long LOGIN_WINDOW_SECONDS = 60;
+    private static final long CLEANUP_INTERVAL_SECONDS = 60;
+    private static final String LOGIN_PATH = "/api/auth/login";
+
+    private final Map<String, Window> windows = new ConcurrentHashMap<>();
+    private final AtomicLong lastCleanup = new AtomicLong(0);
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull FilterChain filterChain) throws ServletException, IOException {
-        String clientIp = getClientIp(request);
         long now = Instant.now().getEpochSecond();
-
-
-        bucketList.computeIfAbsent(clientIp,k -> new bucket(now));
-
-        bucket target = bucketList.get(clientIp);
-
-        if (target.checkLimit(now)){
-            response.setStatus(429);
-            response.addHeader("Retry-After",String.valueOf(target.getTimeLeft(now)));
+        String client = request.getRemoteAddr();
+        purgeExpired(now);
+        long retryAfter = hit("all:" + client, GENERAL_LIMIT, GENERAL_WINDOW_SECONDS, now);
+        if (retryAfter == 0 && isLogin(request)) {
+            retryAfter = hit("login:" + client, LOGIN_LIMIT, LOGIN_WINDOW_SECONDS, now);
+        }
+        if (retryAfter > 0) {
+            response.setHeader("Retry-After", String.valueOf(retryAfter));
+            ApiErrorWriter.write(response, 429, "RATE_LIMITED", "Bạn thao tác quá nhanh, vui lòng thử lại sau ít giây");
             return;
         }
-
         filterChain.doFilter(request, response);
     }
 
-    private String getClientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            // X-Forwarded-For: client, proxy1, proxy2
-            int comma = xff.indexOf(',');
-            return (comma >= 0 ? xff.substring(0, comma) : xff).trim();
-        }
-        String remoteAddr = request.getRemoteAddr();
-        return remoteAddr != null ? remoteAddr : "unknown";
+    private boolean isLogin(HttpServletRequest request) {
+        return "POST".equalsIgnoreCase(request.getMethod()) && LOGIN_PATH.equals(request.getRequestURI());
     }
 
-    private static class bucket{
-        private long startFrom;
-        private AtomicInteger counter;
+    private long hit(String key, int limit, long windowSeconds, long now) {
+        Window window = windows.computeIfAbsent(key, k -> new Window(now, windowSeconds));
+        return window.hit(now, limit);
+    }
 
-        public bucket(long startFrom) {
-            this.startFrom = startFrom;
-            this.counter = new AtomicInteger(0);
+    private void purgeExpired(long now) {
+        long last = lastCleanup.get();
+        if (now - last < CLEANUP_INTERVAL_SECONDS || !lastCleanup.compareAndSet(last, now)) return;
+        windows.entrySet().removeIf(entry -> entry.getValue().expired(now));
+    }
+
+    private static final class Window {
+
+        private final long windowSeconds;
+        private long start;
+        private int count;
+
+        private Window(long start, long windowSeconds) {
+            this.start = start;
+            this.windowSeconds = windowSeconds;
         }
 
-        public boolean checkLimit(long currentTime){
-            if (currentTime>=this.startFrom+WINDOW_SECOND) {
-                this.startFrom = currentTime;
-                this.counter = new AtomicInteger(0);
+        private synchronized long hit(long now, int limit) {
+            if (now - start >= windowSeconds) {
+                start = now;
+                count = 0;
             }
-
-            return this.counter.incrementAndGet() > MAXIMUM_REQUEST;
+            count++;
+            if (count <= limit) return 0;
+            return Math.max(1, start + windowSeconds - now);
         }
 
-        public long getTimeLeft(long currentTime){
-            return this.startFrom+WINDOW_SECOND-currentTime;
+        private synchronized boolean expired(long now) {
+            return now - start >= windowSeconds;
         }
     }
 }

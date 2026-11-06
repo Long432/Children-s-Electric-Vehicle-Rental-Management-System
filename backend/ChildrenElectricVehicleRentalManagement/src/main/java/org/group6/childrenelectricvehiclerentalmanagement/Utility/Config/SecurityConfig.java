@@ -1,12 +1,12 @@
 package org.group6.childrenelectricvehiclerentalmanagement.Utility.Config;
 
-import jakarta.servlet.http.Cookie;
+import org.group6.childrenelectricvehiclerentalmanagement.Services.AuthService;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.ApiErrorWriter;
 import org.group6.childrenelectricvehiclerentalmanagement.Utility.Filters.JwtAuthenticationFilter;
 import org.group6.childrenelectricvehiclerentalmanagement.Utility.Filters.RatelimitFilter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -15,12 +15,12 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -33,57 +33,38 @@ public class SecurityConfig {
     }
 
     @Bean
-    public CookieEncoder cookieEncoder(){
-        return new CookieEncoder();
-    }
-
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, RatelimitFilter ratelimitFilter, JwtAuthenticationFilter jwtAuthenticationFilter)  {
+    public SecurityFilterChain filterChain(HttpSecurity http, AuthService authService) throws Exception {
+        RatelimitFilter ratelimitFilter = new RatelimitFilter();
+        JwtAuthenticationFilter jwtAuthenticationFilter = new JwtAuthenticationFilter(authService);
         http.csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
+                .httpBasic(AbstractHttpConfigurer::disable)
+                .formLogin(AbstractHttpConfigurer::disable)
+                .logout(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(handling -> handling
+                        .authenticationEntryPoint((request, response, exception) ->
+                                ApiErrorWriter.write(response, 401, "UNAUTHORIZED", "Chưa đăng nhập hoặc phiên đã hết hạn"))
+                        .accessDeniedHandler((request, response, exception) ->
+                                ApiErrorWriter.write(response, 403, "FORBIDDEN", "Bạn không có quyền thực hiện thao tác này")))
                 .addFilterBefore(ratelimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(jwtAuthenticationFilter, RatelimitFilter.class)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/error").permitAll()
-                        .requestMatchers("/vehicle/**").permitAll()
-
-                        .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/auth/signup").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/auth/logout").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/auth/me").authenticated()
-
-                        .requestMatchers(HttpMethod.POST, "/sessions/start").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/sessions/current/end").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/sessions/current").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/sessions").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/sessions/{id}").permitAll()
-                        .requestMatchers(HttpMethod.PATCH, "/sessions/{id}").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/sessions/{id}/cancel").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/sessions/current/vehicles").permitAll()
-                        .requestMatchers(HttpMethod.POST,"/sessions").permitAll()
-                        .requestMatchers(HttpMethod.DELETE, "/sessions/current/vehicles/{vehicle_id}").permitAll()
-
-                        .requestMatchers("/settings/**").authenticated()
-                        .requestMatchers("/tickets/**").authenticated()
-                        .requestMatchers("/package/**").authenticated()
-                        .anyRequest().authenticated()
-                )
-                .exceptionHandling(handling -> handling.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)));
+                        .requestMatchers("/error", "/api/auth/login").permitAll()
+                        .anyRequest().authenticated());
         return http.build();
     }
 
     @Bean
-    CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource(@Value("${app.cors.allowed-origins:http://localhost:3000}") String allowedOrigins) {
+        List<String> origins = Arrays.stream(allowedOrigins.split(",")).map(String::trim).filter(origin -> !origin.isEmpty()).toList();
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000"));
+        configuration.setAllowedOrigins(origins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
-        configuration.setAllowCredentials(true);
-
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        configuration.setAllowCredentials(false);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
-
         return source;
     }
 }

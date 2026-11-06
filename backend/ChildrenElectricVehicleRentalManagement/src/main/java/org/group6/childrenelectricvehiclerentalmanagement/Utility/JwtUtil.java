@@ -1,75 +1,78 @@
 package org.group6.childrenelectricvehiclerentalmanagement.Utility;
 
-import org.group6.childrenelectricvehiclerentalmanagement.Models.User;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
-import com.nimbusds.jose.JWSObject;
-import com.nimbusds.jose.Payload;
 import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jose.crypto.MACVerifier;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
+import java.time.Instant;
 import java.util.Date;
+import java.util.Optional;
+import java.util.UUID;
 
 @Component
-public class JwtUtil{
+public class JwtUtil {
 
-    private final String secret;
+    public record IssuedToken(String value, Instant expiresAt) {
+    }
+
+    private final MACSigner signer;
+    private final MACVerifier verifier;
     private final long expirationMs;
 
     public JwtUtil(
-            @Value("${jwt.secret:childrenelectricvehiclerentalmanagement}") String secret,
-            @Value("${jwt.expiration-ms:604800000}") long expirationMs) {
-        this.secret = secret;
+            @Value("${jwt.secret:}") String secret,
+            @Value("${jwt.expiration-ms:86400000}") long expirationMs) {
+        if (secret == null || secret.isBlank() || secret.startsWith("DOI_")) {
+            throw new IllegalStateException("Chưa cấu hình jwt.secret: chạy setup-local.ps1 (Windows) hoặc setup-local.sh (macOS, Linux), hoặc đặt biến môi trường JWT_SECRET");
+        }
+        byte[] key = secret.getBytes(StandardCharsets.UTF_8);
+        try {
+            this.signer = new MACSigner(key);
+            this.verifier = new MACVerifier(key);
+        } catch (JOSEException e) {
+            throw new IllegalStateException("Khóa JWT không hợp lệ, cần tối thiểu 32 ký tự", e);
+        }
         this.expirationMs = expirationMs;
     }
-    public Long expirationMs(){
-        return this.expirationMs;
-    }
 
-    public String generateToken(User user) {
+    public IssuedToken issue(long userId, String username) {
+        Instant now = Instant.now();
+        Instant expiresAt = now.plusMillis(expirationMs);
+        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                .subject(String.valueOf(userId))
+                .claim("username", username)
+                .jwtID(UUID.randomUUID().toString())
+                .issueTime(Date.from(now))
+                .expirationTime(Date.from(expiresAt))
+                .build();
+        SignedJWT jwt = new SignedJWT(new JWSHeader(JWSAlgorithm.HS256), claims);
         try {
-            Date now = new Date();
-            Date expiry = new Date(now.getTime() + expirationMs);
-
-            JWSHeader header = new JWSHeader(JWSAlgorithm.HS256);
-            Payload payload = new Payload(
-                    "{\"sub\":\"" + user.getId() +
-                            "\",\"username\":\"" + user.getUsername() +
-                            "\",\"iat\":" + (now.getTime() / 1000) +
-                            ",\"exp\":" + (expiry.getTime() / 1000) + "}"
-            );
-
-            JWSObject jws = new JWSObject(header, payload);
-            jws.sign(new MACSigner(secret.getBytes()));
-            return jws.serialize();
+            jwt.sign(signer);
         } catch (JOSEException e) {
-            throw new RuntimeException("Failed to generate JWT", e);
+            throw new IllegalStateException("Không thể tạo JWT", e);
         }
+        return new IssuedToken(jwt.serialize(), expiresAt);
     }
 
-    public boolean validateToken(String token) {
-        if (token.startsWith("Bearer ")) token = token.substring(7);
+    public Optional<Long> parseUserId(String token) {
         try {
-            JWSObject jws = JWSObject.parse(token);
-            jws.verify(new MACVerifier(secret.getBytes()));
-            return jws.getPayload().toJSONObject().get("exp") != null &&
-                    ((Number) jws.getPayload().toJSONObject().get("exp")).longValue() > (System.currentTimeMillis() / 1000);
-        } catch (ParseException | JOSEException e) {
-            return false;
+            SignedJWT jwt = SignedJWT.parse(token);
+            if (!JWSAlgorithm.HS256.equals(jwt.getHeader().getAlgorithm())) return Optional.empty();
+            if (!jwt.verify(verifier)) return Optional.empty();
+            JWTClaimsSet claims = jwt.getJWTClaimsSet();
+            Date expiry = claims.getExpirationTime();
+            if (expiry == null || !expiry.after(new Date())) return Optional.empty();
+            return Optional.of(Long.parseLong(claims.getSubject()));
+        } catch (ParseException | JOSEException | NumberFormatException e) {
+            return Optional.empty();
         }
     }
-
-    public int getUserIdFromToken(String token) throws Exception {
-        try {
-            JWSObject jws = JWSObject.parse(token);
-            return Integer.parseInt(jws.getPayload().toJSONObject().get("sub").toString());
-        } catch (ParseException e) {
-            throw new Exception("token không hợp lệ");
-        }
-    }
-
 }
