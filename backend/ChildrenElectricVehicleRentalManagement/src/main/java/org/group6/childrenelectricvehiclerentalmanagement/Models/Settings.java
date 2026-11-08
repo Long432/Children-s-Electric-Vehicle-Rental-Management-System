@@ -28,6 +28,9 @@ public class Settings extends Timestamped {
     @Column(name = "minimum_minutes", nullable = false)
     private Integer minimumMinutes;
 
+    @Column(name = "cancel_wait_minutes", nullable = false)
+    private Integer cancelWaitMinutes;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "updated_by")
     private User updatedBy;

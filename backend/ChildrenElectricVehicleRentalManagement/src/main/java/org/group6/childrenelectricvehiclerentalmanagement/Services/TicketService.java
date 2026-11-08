@@ -9,6 +9,7 @@ import org.group6.childrenelectricvehiclerentalmanagement.Enum.SessionStatus;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.TicketStatus;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.VehicleStatus;
 import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.*;
+import org.group6.childrenelectricvehiclerentalmanagement.Models.Package;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Payment;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Session;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Settings;
@@ -68,13 +69,14 @@ public class TicketService {
         Session session = sessionRepository.lockByStatus(SessionStatus.InProgress).stream().findFirst()
                 .orElseThrow(NoActiveSession::new);
 
-        List<ValidPackage> packages = packageRepository.findByActiveTrueOrderByMinutesAsc().stream()
-                .map(p -> new ValidPackage(p.getAmount(), p.getMinutes(), Boolean.TRUE.equals(p.getIsDefault())))
-                .toList();
-        ValidPackage defaultPackage = packages.stream().filter(ValidPackage::isDefault).findFirst()
+        List<Package> packages = packageRepository.findByActiveTrueOrderByMinutesAsc();
+        Package defaultPackage = packages.stream().filter(p -> Boolean.TRUE.equals(p.getIsDefault())).findFirst()
                 .orElseThrow(NoPricePackage::new);
+        Package matchedPackage = packages.stream().filter(p -> p.getMinutes() == minutes).findFirst().orElse(null);
 
-        int price = PricingUtil.priceForNewTicket(minutes, packages, defaultPackage);
+        int price = matchedPackage != null
+                ? matchedPackage.getAmount()
+                : PricingUtil.priceByRate(minutes, defaultPackage.getAmount(), defaultPackage.getMinutes());
         LocalDateTime now = TimeUtil.now();
         User actor = userRepository.getReferenceById(request.getActorId());
 
@@ -87,11 +89,13 @@ public class TicketService {
         ticket.setPaymentMethod(method);
         ticket.setTotalMinutes(minutes);
         ticket.setAmountPaid(price);
-        ticket.setPriceAmount(defaultPackage.amount());
-        ticket.setPriceMinutes(defaultPackage.minutes());
+        ticket.setPricePackage(matchedPackage);
+        ticket.setPriceAmount(defaultPackage.getAmount());
+        ticket.setPriceMinutes(defaultPackage.getMinutes());
         ticket.setOverdueFeePerMinute(settings.getOverdueFeePerMinute());
         ticket.setOverdueGraceMinutes(settings.getOverdueGraceMinutes());
         ticket.setRefundEnabled(settings.getRefundEnabled());
+        ticket.setCancelWaitMinutes(settings.getCancelWaitMinutes());
         ticket.setQueuedAt(now);
         ticket.setCreatedBy(actor);
         ticketRepository.save(ticket);
@@ -195,7 +199,7 @@ public class TicketService {
         LocalDateTime now = TimeUtil.now();
         refreshOverdueIfRunning(ticket.getSession(), now);
 
-        List<Responses.PaymentResponse> payments = paymentRepository.findByIdOrderByIdAsc(id).stream()
+        List<Responses.PaymentResponse> payments = paymentRepository.findByTicketIdOrderByIdAsc(id).stream()
                 .map(p -> new Responses.PaymentResponse(p.getId(), p.getType().name(), p.getMethod().name(),
                         p.getAmount(), p.getMinutes(), TimeUtil.iso(p.getCreatedAt())))
                 .toList();
@@ -244,6 +248,10 @@ public class TicketService {
             throw new TicketNotCancelable();
         }
         LocalDateTime now = TimeUtil.now();
+        LocalDateTime cancelableAt = ticket.getQueuedAt().plusMinutes(ticket.getCancelWaitMinutes());
+        if (now.isBefore(cancelableAt)) {
+            throw new CancelTooEarly(PricingUtil.minutesUntil(cancelableAt, now));
+        }
         User actor = userRepository.getReferenceById(request.getActorId());
         PaymentMethod method = refundMethod != null ? refundMethod : ticket.getPaymentMethod();
 
@@ -269,7 +277,7 @@ public class TicketService {
 
         Ticket ticket = lockTicket(id);
         requireSessionRunning(ticket);
-        requireActive(ticket, "TICKET_NOT_ACTIVE", "Chỉ đổi xe được cho vé đang sử dụng");
+        requireActive(ticket);
         Vehicle oldVehicle = ticket.getVehicle();
         if (oldVehicle != null && oldVehicle.getSlug().equals(slug)) {
             throw new SameVehicle();
@@ -303,7 +311,7 @@ public class TicketService {
         }
         Ticket ticket = lockTicket(id);
         requireSessionRunning(ticket);
-        requireActive(ticket, "TICKET_NOT_ACTIVE", "Chỉ gia hạn được vé đang sử dụng");
+        requireActive(ticket);
 
         LocalDateTime now = TimeUtil.now();
         User actor = userRepository.getReferenceById(request.getActorId());
@@ -329,7 +337,7 @@ public class TicketService {
 
         Ticket ticket = lockTicket(id);
         requireSessionRunning(ticket);
-        requireActive(ticket, "TICKET_NOT_RETURNABLE", "Chỉ trả xe được cho vé đang sử dụng");
+        requireActive(ticket);
 
         LocalDateTime now = TimeUtil.now();
         User actor = userRepository.getReferenceById(request.getActorId());
@@ -397,7 +405,7 @@ public class TicketService {
     private Optional<Session> resolveSession(Long sessionId) throws Exception {
         if (sessionId != null) {
             Session session = sessionRepository.findById(sessionId)
-                    .orElseThrow(() -> new SessionNotFound());
+                    .orElseThrow(SessionNotFound::new);
             return Optional.of(session);
         }
         return sessionRepository.findFirstByStatusOrderByIdDesc(SessionStatus.InProgress);
@@ -413,7 +421,7 @@ public class TicketService {
         }
     }
 
-    private void requireActive(Ticket ticket, String code, String message) throws TicketNotActive {
+    private void requireActive(Ticket ticket) throws TicketNotActive {
         if (ticket.getStatus() != TicketStatus.Inused && ticket.getStatus() != TicketStatus.Overdue) {
             throw new TicketNotActive();
         }
@@ -421,7 +429,7 @@ public class TicketService {
 
     private Vehicle requireAvailableVehicle(String slug, Session session) throws Exception {
         Vehicle vehicle = vehicleRepository.lockBySlug(slug)
-                .orElseThrow(() -> new VehicleNotFound());
+                .orElseThrow(VehicleNotFound::new);
         if (vehicle.getStatus() != VehicleStatus.Online) {
             throw new VehicleNotAvailable();
         }
@@ -480,10 +488,14 @@ public class TicketService {
                     t.getOverdueFeePerMinute());
         }
         int chargeable = PricingUtil.chargeableMinutes(overdueMinutes, t.getOverdueGraceMinutes());
+        String cancelableAt = t.getStatus() == TicketStatus.Waiting
+                ? TimeUtil.iso(t.getQueuedAt().plusMinutes(t.getCancelWaitMinutes()))
+                : null;
         return new Responses.TicketResponse(
                 t.getId(), t.getTicketNo(), t.getPhone(), t.getStatus().name(), t.getSession().getId(),
                 toVehicleBrief(t.getVehicle()), t.getPaymentMethod().name(), t.getTotalMinutes(), t.getAmountPaid(),
                 TimeUtil.iso(t.getQueuedAt()), TimeUtil.iso(t.getStartedAt()), TimeUtil.iso(t.getDueAt()),
-                TimeUtil.iso(t.getReturnedAt()), remaining, overdueMinutes, chargeable, fee, t.getRefundAmount());
+                TimeUtil.iso(t.getReturnedAt()), remaining, overdueMinutes, chargeable, fee, t.getRefundAmount(),
+                cancelableAt);
     }
 }

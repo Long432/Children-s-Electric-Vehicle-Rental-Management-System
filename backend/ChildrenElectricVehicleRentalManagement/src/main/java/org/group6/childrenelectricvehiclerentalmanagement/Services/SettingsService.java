@@ -19,14 +19,19 @@ import org.group6.childrenelectricvehiclerentalmanagement.Utility.Long.MinutesRe
 import org.group6.childrenelectricvehiclerentalmanagement.Utility.Long.ToggleRequestValidator;
 import org.group6.childrenelectricvehiclerentalmanagement.Utility.Long.UpdatePackagesRequestValidator;
 import org.group6.childrenelectricvehiclerentalmanagement.Utility.TimeUtil;
+import org.group6.childrenelectricvehiclerentalmanagement.Utility.Validators.CancelWaitPolicy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class SettingsService {
@@ -37,6 +42,7 @@ public class SettingsService {
     private static final AmountPerMinuteRequestValidator OVERDUE_FEE_VALIDATOR = new AmountPerMinuteRequestValidator();
     private static final MinutesRequestValidator OVERDUE_LIMIT_VALIDATOR = new MinutesRequestValidator("Thời gian ân hạn", 0, MinutesRequestValidator.MAX_MINUTES);
     private static final MinutesRequestValidator MINIMUM_TIME_VALIDATOR = new MinutesRequestValidator("Thời gian thuê tối thiểu", 0, MinutesRequestValidator.MAX_MINUTES);
+    private static final MinutesRequestValidator CANCEL_WAIT_VALIDATOR = new MinutesRequestValidator("Thời gian chờ trước khi hủy vé", CancelWaitPolicy.MIN_CANCEL_WAIT_MINUTES, MinutesRequestValidator.MAX_MINUTES);
 
     private final SettingsRepository settingsRepository;
     private final PackageRepository packageRepository;
@@ -119,38 +125,67 @@ public class SettingsService {
     }
 
     @Transactional(rollbackFor = Exception.class)
+    public SettingsResponse setCancelWait(User actor, MinutesRequest request) throws ValidationException {
+        CANCEL_WAIT_VALIDATOR.validate(request);
+        Optional<Package> lowest = packageRepository.findFirstByActiveTrueOrderByMinutesAsc();
+        if (lowest.isPresent() && request.getMinutes() >= lowest.get().getMinutes()) {
+            throw new ValidationException("minutes",
+                    "Thời gian chờ trước khi hủy vé phải nhỏ hơn gói thấp nhất hiện tại (" + lowest.get().getMinutes() + " phút)");
+        }
+        Settings settings = loadOrCreate();
+        int before = settings.getCancelWaitMinutes();
+        settings.setCancelWaitMinutes(request.getMinutes());
+        saveSettings(settings, actor);
+        audit(actor, "settings.set_cancel_wait", "cancel_wait_minutes", before, settings.getCancelWaitMinutes());
+        return toResponse(settings);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
     public SettingsResponse updatePackages(User actor, UpdatePackagesRequest request) throws ValidationException {
         PACKAGES_VALIDATOR.validate(request);
-        LocalDateTime now = TimeUtil.now();
+        Settings settings = loadOrCreate();
+        int cancelWait = settings.getCancelWaitMinutes();
 
-        List<Package> current = packageRepository.findByActiveTrueOrderByMinutesAsc();
-        List<Map<String, Object>> before = describePackages(current);
-
-        for (Package old : current) {
-            old.setActive(false);
-            old.setUpdatedAt(now);
+        List<PackageItemRequest> items = request.getPackages();
+        Set<Integer> requestedMinutes = new HashSet<>();
+        for (int i = 0; i < items.size(); i++) {
+            int minutes = items.get(i).getMinutes();
+            if (minutes <= cancelWait) {
+                throw new ValidationException("packages[" + i + "].minutes",
+                        "Số phút của gói thứ " + (i + 1) + " phải lớn hơn thời gian chờ hủy vé (" + cancelWait + " phút)");
+            }
+            requestedMinutes.add(minutes);
         }
-        packageRepository.saveAllAndFlush(current);
 
-        List<Package> created = new ArrayList<>();
-        for (PackageItemRequest item : request.getPackages()) {
-            Package pkg = new Package();
-            pkg.setAmount(item.getAmount());
-            pkg.setMinutes(item.getMinutes());
-            pkg.setIsDefault(item.getIsDefault());
-            pkg.setActive(true);
-            pkg.setCreatedAt(now);
-            pkg.setUpdatedAt(now);
-            created.add(pkg);
+        List<Package> existing = packageRepository.findAllByOrderByMinutesAsc();
+        List<Map<String, Object>> before = describePackages(existing);
+
+        Map<Integer, Package> kept = new HashMap<>();
+        List<Package> removed = new ArrayList<>();
+        for (Package current : existing) {
+            if (requestedMinutes.contains(current.getMinutes()) && !kept.containsKey(current.getMinutes())) {
+                kept.put(current.getMinutes(), current);
+            } else {
+                removed.add(current);
+            }
         }
-        List<Package> saved = packageRepository.saveAllAndFlush(created);
+        packageRepository.deleteAll(removed);
+        packageRepository.flush();
 
-        saveSettings(loadOrCreate(), actor);
+        List<Package> result = new ArrayList<>();
+        for (PackageItemRequest item : items) {
+            Package pricePackage = kept.getOrDefault(item.getMinutes(), new Package());
+            pricePackage.setAmount(item.getAmount());
+            pricePackage.setMinutes(item.getMinutes());
+            pricePackage.setIsDefault(item.getIsDefault());
+            pricePackage.setActive(true);
+            result.add(pricePackage);
+        }
+        List<Package> saved = packageRepository.saveAllAndFlush(result);
 
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("before", before);
-        payload.put("after", describePackages(saved));
-        return toResponse(loadOrCreate());
+        saveSettings(settings, actor);
+        audit(actor, "settings.update_packages", "packages", before, describePackages(saved));
+        return toResponse(settings);
     }
 
     private Settings loadOrCreate() {
@@ -166,6 +201,7 @@ public class SettingsService {
         settings.setOverdueFeePerMinute(0);
         settings.setOverdueGraceMinutes(0);
         settings.setMinimumMinutes(0);
+        settings.setCancelWaitMinutes(CancelWaitPolicy.MIN_CANCEL_WAIT_MINUTES);
         settings.setCreatedAt(now);
         settings.setUpdatedAt(now);
         return settingsRepository.save(settings);
@@ -182,16 +218,17 @@ public class SettingsService {
         beforeMap.put(field, before);
         Map<String, Object> afterMap = new LinkedHashMap<>();
         afterMap.put(field, after);
-        auditLogService.log(actor, action, "settings", actor.getId(), beforeMap, afterMap);
+        auditLogService.log(actor, action, "settings", SETTINGS_ID.longValue(), beforeMap, afterMap);
     }
 
     private List<Map<String, Object>> describePackages(List<Package> packages) {
         List<Map<String, Object>> result = new ArrayList<>();
-        for (Package pkg : packages) {
+        for (Package pricePackage : packages) {
             Map<String, Object> row = new LinkedHashMap<>();
-            row.put("amount", pkg.getAmount());
-            row.put("minutes", pkg.getMinutes());
-            row.put("is_default", pkg.getIsDefault());
+            row.put("amount", pricePackage.getAmount());
+            row.put("minutes", pricePackage.getMinutes());
+            row.put("is_default", pricePackage.getIsDefault());
+            row.put("active", pricePackage.getActive());
             result.add(row);
         }
         return result;
@@ -199,8 +236,8 @@ public class SettingsService {
 
     private SettingsResponse toResponse(Settings settings) {
         List<PackageResponse> packages = new ArrayList<>();
-        for (Package pkg : packageRepository.findByActiveTrueOrderByMinutesAsc()) {
-            packages.add(new PackageResponse(pkg.getId(), pkg.getAmount(), pkg.getMinutes(), pkg.getIsDefault()));
+        for (Package pricePackage : packageRepository.findByActiveTrueOrderByMinutesAsc()) {
+            packages.add(PackageResponse.from(pricePackage));
         }
         return new SettingsResponse(
                 settings.getRefundEnabled(),
@@ -208,7 +245,8 @@ public class SettingsService {
                 settings.getOverdueFeePerMinute(),
                 settings.getOverdueGraceMinutes(),
                 settings.getMinimumMinutes(),
+                settings.getCancelWaitMinutes(),
                 packages,
-                settings.getUpdatedAt().toString());
+                TimeUtil.iso(settings.getUpdatedAt()));
     }
 }

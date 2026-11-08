@@ -25,9 +25,11 @@ public class Payment extends Timestamped {
     @JoinColumn(name = "ticket_id", nullable = false)
     private Ticket ticket;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false)
     private PaymentType type;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "method", nullable = false)
     private PaymentMethod method;
 
