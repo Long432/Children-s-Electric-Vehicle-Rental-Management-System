@@ -3,6 +3,8 @@ package org.group6.childrenelectricvehiclerentalmanagement.Models.LinkingObject;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.group6.childrenelectricvehiclerentalmanagement.Enum.VehicleStatus;
+import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.AbstractException;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Session;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Timestamped;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Vehicle;
@@ -23,7 +25,7 @@ public class SessionVehicle extends Timestamped {
     @JoinColumn(name = "session_id", nullable = false)
     private Session session;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @JoinColumn(name = "vehicle_id", nullable = false)
     private Vehicle vehicle;
 

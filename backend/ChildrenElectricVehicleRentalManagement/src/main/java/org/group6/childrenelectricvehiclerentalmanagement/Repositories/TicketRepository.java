@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -37,4 +38,8 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
     Optional<Ticket> findFirstBySessionIdAndStatusOrderByQueuedAtAscIdAsc(Long sessionId, TicketStatus status);
 
     List<Ticket> findBySession_IdAndStatus(Long sessionId, TicketStatus status);
+
+    List<Ticket> findBySession_IdAndStatusIn(Long sessionId, Collection<TicketStatus> statuses);
+
+    boolean existsBySession_IdAndStatusIn(Long sessionId, Collection<TicketStatus> statuses);
 }
