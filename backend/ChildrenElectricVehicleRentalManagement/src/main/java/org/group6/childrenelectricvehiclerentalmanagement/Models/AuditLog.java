@@ -3,13 +3,15 @@ package org.group6.childrenelectricvehiclerentalmanagement.Models;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnTransformer;
+
 import java.time.LocalDateTime;
 
 @Getter
 @Setter
 @Entity
 @Table(name = "audit_logs")
-public class AuditLog extends Timestamped {
+public class AuditLog {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false)
@@ -28,6 +30,12 @@ public class AuditLog extends Timestamped {
     @Column(name = "entity_id")
     private Long entityId;
 
+
+    @ColumnTransformer(write = "cast(? as json)")
     @Column(name = "payload",length = 600)
+
     private String payload;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
 }

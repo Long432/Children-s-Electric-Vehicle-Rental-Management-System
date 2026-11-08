@@ -33,6 +33,14 @@ public final class PricingUtil {
         return (int) Math.min(Duration.between(now, dueAt).toMinutes(), Integer.MAX_VALUE);
     }
 
+    public static int minutesUntil(LocalDateTime target, LocalDateTime now) {
+        if (target == null || !target.isAfter(now)) {
+            return 0;
+        }
+        long seconds = Duration.between(now, target).getSeconds();
+        return (int) Math.min((seconds + 59) / 60, Integer.MAX_VALUE);
+    }
+
     public static int overdueMinutes(LocalDateTime dueAt, LocalDateTime now) {
         if (dueAt == null || !now.isAfter(dueAt)) {
             return 0;
