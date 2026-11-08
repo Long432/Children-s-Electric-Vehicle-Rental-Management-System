@@ -27,13 +27,15 @@ public class AuditLogService {
             payload.put("after", after);
         }
 
-        AuditLog entry = new AuditLog();
-        entry.setUser(actor);
-        entry.setAction(action);
-        entry.setEntityType(entityType);
-        entry.setEntityId(entityId);
-        entry.setPayload(JsonUtil.toJson(payload));
-        entry.setCreatedAt(TimeUtil.now());
-        auditLogRepository.save(entry);
+        AuditLog log = new AuditLog();
+        log.setUser(actor);
+        log.setAction(action);
+        log.setEntityType(entityType);
+        log.setEntityId(entityId);
+        log.setPayload(payload.toString());
+        log.setCreatedAt(LocalDateTime.now());
+        log.setUpdatedAt(LocalDateTime.now());
+
+        auditLogRepository.save(log);
     }
 }

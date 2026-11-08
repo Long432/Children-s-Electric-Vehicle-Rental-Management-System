@@ -6,31 +6,34 @@ import org.group6.childrenelectricvehiclerentalmanagement.DTOs.VehicleController
 import org.group6.childrenelectricvehiclerentalmanagement.DTOs.VehicleController.UpdateVehicleStatusRequest;
 import org.group6.childrenelectricvehiclerentalmanagement.DTOs.VehicleController.createVehicleRequest;
 import org.group6.childrenelectricvehiclerentalmanagement.DTOs.VehicleController.vehicleInfoRespond;
-import org.group6.childrenelectricvehiclerentalmanagement.Enum.VehicleStatus;
-import org.group6.childrenelectricvehiclerentalmanagement.Models.Vehicle;
+import org.group6.childrenelectricvehiclerentalmanagement.Models.User;
 import org.group6.childrenelectricvehiclerentalmanagement.Services.VehicleService;
-import org.group6.childrenelectricvehiclerentalmanagement.Utility.Validators.InputValidator;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-@Controller
-@RequestMapping(path="/vehicle")
+import java.util.List;
+
+@RestController
+@RequestMapping(path = "/vehicles")
 @AllArgsConstructor
 @Slf4j
 public class VehicleController extends BaseController {
     private VehicleService vehicleService;
 
-    @PostMapping()
-    public ResponseEntity<?> createNewVehicle(@RequestBody createVehicleRequest request) throws Exception {
-        log.info("Nhận được");
-        InputValidator.isVehicleNameValid(request.vehicle_slug());
-        return ResponseEntity.ok(new vehicleInfoRespond(vehicleService.createNewVehicle(request)));
+    @PostMapping
+    public ResponseEntity<?> createNewVehicle(@RequestBody createVehicleRequest request,
+                                              @AuthenticationPrincipal User actor) throws Exception {
+        return ResponseEntity.ok(new vehicleInfoRespond(vehicleService.createNewVehicle(request, actor)));
     }
 
-    @GetMapping()
-    public ResponseEntity<?> getAllVehicles() throws Exception {
-        return ResponseEntity.ok(vehicleService.getAllVehicle().stream().map(vehicleInfoRespond::new));
+    /** GET /api/vehicle?status=Online&status=Offline&session_id=3 (mặc định không gồm xe đã xóa). */
+    @GetMapping
+    public ResponseEntity<?> getAllVehicles(@RequestParam(name = "status", required = false) List<String> status,
+                                            @RequestParam(name = "session_id", required = false) String sessionId) throws Exception {
+        return ResponseEntity.ok(vehicleService.getAllVehicle(status, sessionId).stream()
+                .map(vehicleInfoRespond::new)
+                .toList());
     }
 
     @GetMapping("/{id}")
@@ -39,23 +42,23 @@ public class VehicleController extends BaseController {
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<?> updateVehicleSlug(@PathVariable long id, @RequestBody UpdateVehicleSlugRequest request) throws Exception {
-        InputValidator.isVehicleNameValid(request.vehicle_slug());
-        Vehicle updatedVehicle = vehicleService.updateVehicleSlug(id,request);
-        return ResponseEntity.ok(new vehicleInfoRespond(updatedVehicle));
+    public ResponseEntity<?> updateVehicleSlug(@PathVariable long id,
+                                               @RequestBody UpdateVehicleSlugRequest request,
+                                               @AuthenticationPrincipal User actor) throws Exception {
+        return ResponseEntity.ok(new vehicleInfoRespond(vehicleService.updateVehicleSlug(id, request, actor)));
     }
 
     @PatchMapping("/{id}/status")
-    public ResponseEntity<?> updateVehicleStatus(@PathVariable long id, @RequestBody UpdateVehicleStatusRequest request) throws Exception {
-        log.info(request.vehicle_status());
-        InputValidator.isVehicleStatusValid(request.vehicle_status());
-        Vehicle updatedVehicle = vehicleService.updateVehicleStatus(id,VehicleStatus.valueOf(request.vehicle_status()));
-        return ResponseEntity.ok(new vehicleInfoRespond(updatedVehicle));
+    public ResponseEntity<?> updateVehicleStatus(@PathVariable long id,
+                                                 @RequestBody UpdateVehicleStatusRequest request,
+                                                 @AuthenticationPrincipal User actor) throws Exception {
+        return ResponseEntity.ok(new vehicleInfoRespond(vehicleService.updateVehicleStatus(id, request, actor)));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteVehicle(@PathVariable long id) throws Exception {
-        vehicleService.deleteVehicle(id);
+    public ResponseEntity<?> deleteVehicle(@PathVariable long id,
+                                           @AuthenticationPrincipal User actor) throws Exception {
+        vehicleService.deleteVehicle(id, actor);
         return ResponseEntity.ok("Xóa xe thành công");
     }
 }

@@ -30,8 +30,10 @@ public class AuditLog {
     @Column(name = "entity_id")
     private Long entityId;
 
+
     @ColumnTransformer(write = "cast(? as json)")
-    @Column(name = "payload")
+    @Column(name = "payload",length = 600)
+
     private String payload;
 
     @Column(name = "created_at", nullable = false, updatable = false)
