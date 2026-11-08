@@ -28,6 +28,6 @@ public class AuditLog extends Timestamped {
     @Column(name = "entity_id")
     private Long entityId;
 
-    @Column(name = "payload")
+    @Column(name = "payload",length = 600)
     private String payload;
 }

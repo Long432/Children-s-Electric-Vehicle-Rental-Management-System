@@ -30,6 +30,7 @@ public class AuditLogService {
         log.setPayload(payload.toString());
         log.setCreatedAt(LocalDateTime.now());
         log.setUpdatedAt(LocalDateTime.now());
+
         auditLogRepository.save(log);
     }
 }
