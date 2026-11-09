@@ -1,4 +1,4 @@
-# Ứng dụng quản lý thuê xe điện trẻ em (React Native + Expo)
+# Ứng dụng quản lý thuê xe điện vui chơi (React Native + Expo)
 
 ## Chạy thử
     npm install
