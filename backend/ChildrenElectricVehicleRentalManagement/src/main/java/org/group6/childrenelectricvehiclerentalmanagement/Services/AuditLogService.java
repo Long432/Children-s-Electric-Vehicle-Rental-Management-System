@@ -9,6 +9,7 @@ import org.group6.childrenelectricvehiclerentalmanagement.Utility.TimeUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -34,8 +35,6 @@ public class AuditLogService {
         log.setEntityId(entityId);
         log.setPayload(payload.toString());
         log.setCreatedAt(LocalDateTime.now());
-        log.setUpdatedAt(LocalDateTime.now());
-
         auditLogRepository.save(log);
     }
 }

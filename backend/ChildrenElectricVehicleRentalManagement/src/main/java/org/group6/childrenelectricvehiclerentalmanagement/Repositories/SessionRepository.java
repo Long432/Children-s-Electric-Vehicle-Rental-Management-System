@@ -10,7 +10,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -31,4 +33,6 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
     List<Session> findAllByStatusAndPlannedEndAtAfter(SessionStatus status, LocalDateTime plannedEndAtAfter);
 
     List<Session> findAllByStatusInAndPlannedEndAtAfter(Collection<SessionStatus> statuses, LocalDateTime plannedEndAtAfter);
+
+    Optional<Session> findByScheduledDateIsAndScheduledTimeIsAfter(LocalDate scheduledDate, LocalTime scheduledTimeAfter);
 }

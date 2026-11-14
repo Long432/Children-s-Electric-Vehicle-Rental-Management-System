@@ -132,6 +132,7 @@ class VehicleServiceUnitTest {
         UpdateVehicleSlugRequest req = new UpdateVehicleSlugRequest("xe-02");
 
         when(vehicleRepository.findById(1L)).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.lockBySlug("xe-01")).thenReturn(Optional.of(vehicle));
 
         assertThrows(VehicleInUse.class, () -> vehicleService.updateVehicleSlug(1L, req, actor));
     }
@@ -208,11 +209,11 @@ class VehicleServiceUnitTest {
         Vehicle vehicle = new Vehicle("xe-01");
         vehicle.setId(1L);
         vehicle.setStatus(VehicleStatus.Inused);
-        vehicleRepository.saveAndFlush(vehicle);
 
         UpdateVehicleStatusRequest req = new UpdateVehicleStatusRequest("Offline");
 
         when(vehicleRepository.findById(1L)).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.lockBySlug("xe-01")).thenReturn(Optional.of(vehicle));
 
         assertThrows(VehicleInUse.class, () -> vehicleService.updateVehicleStatus(1L, req, actor));
     }
@@ -240,7 +241,6 @@ class VehicleServiceUnitTest {
         UpdateVehicleStatusRequest req = new UpdateVehicleStatusRequest("Inused"); // không được set qua API
 
         when(vehicleRepository.findById(1L)).thenReturn(Optional.of(vehicle));
-        when(vehicleRepository.lockBySlug("xe-01")).thenReturn(Optional.of(vehicle));
 
         assertThrows(ValidationException.class, () -> vehicleService.updateVehicleStatus(1L, req, actor));
     }
@@ -271,6 +271,7 @@ class VehicleServiceUnitTest {
         vehicle.setStatus(VehicleStatus.Inused);
 
         when(vehicleRepository.findById(1L)).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.lockBySlug("xe-01")).thenReturn(Optional.of(vehicle));
 
         assertThrows(VehicleInUse.class, () -> vehicleService.deleteVehicle(1L, actor));
     }

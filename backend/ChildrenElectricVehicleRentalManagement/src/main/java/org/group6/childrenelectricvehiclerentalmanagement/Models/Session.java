@@ -58,13 +58,24 @@ public class Session extends Timestamped {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    public Session(LocalDateTime plannedStartAT, LocalDateTime plannedEndAt, Boolean isInstant, User createdBy) {
-        if (isInstant) this.status=SessionStatus.InProgress;
-        else this.status=SessionStatus.Waiting;
+    public Session(LocalDateTime plannedStartAT, LocalDateTime plannedEndAt, User createdBy) {
+        this.status=SessionStatus.Waiting;
         this.scheduledDate = plannedStartAT.toLocalDate();
         this.scheduledTime = plannedStartAT.toLocalTime();
         this.plannedEndAt = plannedEndAt;
-        this.isInstant = isInstant;
+        this.isInstant = false;
+        this.nextTicketNo=1;
+        this.createdBy = createdBy;
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public Session(LocalDateTime plannedEndAt, User createdBy) {
+        this.status=SessionStatus.InProgress;
+        this.scheduledDate = LocalDate.now();
+        this.scheduledTime = LocalTime.now();
+        this.plannedEndAt = plannedEndAt;
+        this.isInstant = true;
         this.nextTicketNo=1;
         this.createdBy = createdBy;
         this.createdAt = LocalDateTime.now();

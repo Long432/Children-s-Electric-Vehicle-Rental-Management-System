@@ -1,5 +1,6 @@
 package org.group6.childrenelectricvehiclerentalmanagement.integration;
 
+import lombok.extern.slf4j.Slf4j;
 import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SessionController.AddSessionVehiclesRequest;
 import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SessionController.CreateSessionRequest;
 import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SessionController.SessionDetailResponse;
@@ -12,6 +13,7 @@ import org.group6.childrenelectricvehiclerentalmanagement.Enum.VehicleStatus;
 import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.AbstractException;
 import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.CollideWithOtherSession;
 import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.SessionHasOpenTickets;
+import org.group6.childrenelectricvehiclerentalmanagement.Models.LinkingObject.SessionVehicle;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Session;
 import org.group6.childrenelectricvehiclerentalmanagement.Services.SessionService;
 import org.junit.jupiter.api.Test;
@@ -29,9 +31,9 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Integration test cho SessionService với H2 in-memory database.
  * Luồng kiểm tra: tạo phiên → bắt đầu → kết thúc → hủy → thêm/bớt xe → stats.
- * Mỗi test tự kiểm soát trạng thái session để tránh xung đột (chỉ một phiên InProgress tại một thời điểm).
+ * Mỗi test tự kiểm soát trạng thái session1 để tránh xung đột (chỉ một phiên InProgress tại một thời điểm).
  */
-
+@Slf4j
 class SessionIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired private SessionService sessionService;
@@ -39,11 +41,10 @@ class SessionIntegrationTest extends AbstractIntegrationTest {
     @Test
     void createWaitingSession_success() throws Exception {
         CreateSessionRequest req = new CreateSessionRequest(
-                LocalDate.of(2026, 11, 12),
-                LocalTime.of(8, 0),
-                LocalDate.of(2026, 11, 12),
-                LocalTime.of(17, 0),
-                false
+                LocalDateTime.now().plusHours(3).toLocalDate(),
+                LocalDateTime.now().plusHours(3).toLocalTime(),
+                LocalDateTime.now().plusHours(3).plusMinutes(30).toLocalDate(),
+                LocalDateTime.now().plusHours(3).plusMinutes(30).toLocalTime()
         );
 
         SessionDetailResponse res = sessionService.createSession(req, seller);
@@ -53,28 +54,31 @@ class SessionIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void createInstantSession_success() throws Exception {
-        // session từ setUp đang InProgress, cần kết thúc trước để không xung đột
-        session.setStatus(SessionStatus.Ended);
-        sessionRepository.save(session);
+    void createWaitingSession_viaCreateSession_shouldCreateWaiting() throws Exception {
+        // session1 từ setUp đang InProgress, cần kết thúc trước để không xung đột
+        session1.setStatus(SessionStatus.Ended);
+        sessionRepository.save(session1);
 
-        CreateSessionRequest req = new CreateSessionRequest(null, null, null, null, true);
+        LocalDateTime start = LocalDateTime.now().plusHours(1);
+        LocalDateTime end = start.plusHours(2);
+        CreateSessionRequest req = new CreateSessionRequest(
+                start.toLocalDate(), start.toLocalTime(),
+                end.toLocalDate(), end.toLocalTime());
 
         SessionDetailResponse res = sessionService.createSession(req, seller);
 
         assertNotNull(res);
-        assertEquals(SessionStatus.InProgress, res.session_status());
+        assertEquals(SessionStatus.Waiting, res.session_status());
     }
 
     @Test
     void createSession_collideWithExisting_shouldThrow() throws Exception {
-        // session từ setUp là InProgress từ 8:00 đến 17:00 ngày 10/11/2026
+        // session1 từ setUp là InProgress từ 8:00 đến 17:00 ngày 10/11/2026
         CreateSessionRequest req = new CreateSessionRequest(
-                LocalDate.of(2026, 11, 10),
-                LocalTime.of(9, 0),
-                LocalDate.of(2026, 11, 10),
-                LocalTime.of(10, 0),
-                false
+                LocalDateTime.now().plusMinutes(30).toLocalDate(),
+                LocalDateTime.now().plusMinutes(30).toLocalTime(),
+                LocalDateTime.now().plusHours(2).toLocalDate(),
+                LocalDateTime.now().plusHours(2).toLocalTime()
         );
 
         assertThrows(CollideWithOtherSession.class, () -> sessionService.createSession(req, seller));
@@ -93,21 +97,26 @@ class SessionIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void startAlreadyInProgressSession_shouldThrow() throws Exception {
-        // session từ setUp đã InProgress
-        StartSessionRequest req = new StartSessionRequest(session.getId(), null, null);
+        // session1 từ setUp đã InProgress
+        StartSessionRequest req = new StartSessionRequest(session1.getId(), null, null);
 
         assertThrows(AbstractException.class, () -> sessionService.startSession(req, seller));
     }
 
     @Test
-    void startInstantWithoutSessionId_shouldCreateNewInProgress() throws Exception {
-        // Kết thúc session từ setUp trước
-        session.setStatus(SessionStatus.Ended);
-        sessionRepository.save(session);
+    void startInstantSessionId_shouldCreateNewInProgress() throws Exception {
+        // Kết thúc session1 từ setUp trước
+        session1.setStatus(SessionStatus.Ended);
+        sessionRepository.save(session1);
 
-        StartSessionRequest req = new StartSessionRequest(null, List.of("xe-01"),
-                LocalDateTime.of(2026, 11, 11, 20, 0));
+        LocalDateTime start = LocalDateTime.of(2026, 11, 14, 8, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 11, 14, 20, 30);
+        CreateSessionRequest createReq = new CreateSessionRequest(
+                start.toLocalDate(), start.toLocalTime(),
+                end.toLocalDate(), end.toLocalTime());
 
+        SessionDetailResponse createRes = sessionService.createSession(createReq,seller);
+        StartSessionRequest req = new StartSessionRequest(createRes.id(), List.of("xe-01"),createRes.planned_end_at());
         SessionDetailResponse res = sessionService.startSession(req, seller);
 
         assertNotNull(res);
@@ -116,18 +125,18 @@ class SessionIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void endCurrentSession_noOpenTickets_shouldEnd() throws Exception {
-        // session từ setUp là InProgress, không có ticket
+        // session1 từ setUp là InProgress, không có ticket
         SessionDetailResponse res = sessionService.endCurrentSession(seller);
 
         assertNotNull(res);
         assertEquals(SessionStatus.Ended, res.session_status());
-        assertEquals(VehicleStatus.Offline, vehicle.getStatus());
+        assertEquals(VehicleStatus.Offline, vehicle1.getStatus());
     }
 
     @Test
     void endCurrentSession_withOpenTickets_shouldThrow() throws Exception {
-        // session từ setUp là InProgress, tạo ticket Waiting
-        createWaitingTicket(session, "0901234567", 30, PaymentMethod.Cash);
+        // session1 từ setUp là InProgress, tạo ticket Waiting
+        createWaitingTicket(session1, "0901234567", 30, PaymentMethod.Cash);
 
         assertThrows(SessionHasOpenTickets.class, () -> sessionService.endCurrentSession(seller));
     }
@@ -144,22 +153,26 @@ class SessionIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void cancelInProgressSession_shouldThrow() throws Exception {
-        // session từ setUp đã InProgress
-        assertThrows(AbstractException.class, () -> sessionService.cancelSession(session.getId(), seller));
+        // session1 từ setUp đã InProgress
+        assertThrows(AbstractException.class, () -> sessionService.cancelSession(session1.getId(), seller));
     }
 
     @Test
     void removeVehicleFromCurrentSession_success() throws Exception {
-        // session từ setUp đã InProgress, bớt xe trực tiếp
-        SessionDetailResponse res = sessionService.removeVehicleFromCurrentSession(vehicle.getId(), seller);
+        // session1 từ setUp đã InProgress, bớt xe trực tiếp
+        SessionDetailResponse res = sessionService.removeVehicleFromCurrentSession(vehicle1.getId(), seller);
 
         assertNotNull(res);
     }
 
     @Test
     void addVehicleToCurrentSession_success() throws Exception {
-        // session từ setUp đã InProgress, thêm xe trực tiếp
-        AddSessionVehiclesRequest req = new AddSessionVehiclesRequest(List.of("xe-01"));
+        for(SessionVehicle sv:sessionVehicleRepository.findAll()){
+            log.info("{} {}",sv.getVehicle().getSlug(),sv.getVehicle().getId());
+        }
+
+        // session1 từ setUp đã InProgress, thêm xe trực tiếp
+        AddSessionVehiclesRequest req = new AddSessionVehiclesRequest(List.of("xe-03"));
 
         SessionDetailResponse res = sessionService.addVehiclesToCurrentSession(req, seller);
 
@@ -168,10 +181,10 @@ class SessionIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void getSessionDetail_success() throws Exception {
-        SessionDetailResponse res = sessionService.getSessionDetail(session.getId());
+        SessionDetailResponse res = sessionService.getSessionDetail(session1.getId());
 
         assertNotNull(res);
-        assertEquals(session.getId(), res.id());
+        assertEquals(session1.getId(), res.id());
     }
 
     @Test
@@ -179,8 +192,9 @@ class SessionIntegrationTest extends AbstractIntegrationTest {
         Session waiting = createWaitingSession();
 
         UpdateSessionRequest req = new UpdateSessionRequest(
-                LocalDateTime.of(2026, 11, 12, 18, 0),
-                LocalDate.of(2026, 11, 12), LocalTime.of(9, 0),
+                LocalDateTime.now().plusHours(7),
+                LocalDateTime.now().plusHours(6).toLocalDate(),
+                LocalDateTime.now().plusHours(6).toLocalTime(),
                 false
         );
 
@@ -194,6 +208,6 @@ class SessionIntegrationTest extends AbstractIntegrationTest {
         var res = sessionService.listSessions(null, 1, 20);
 
         assertNotNull(res);
-        assertTrue(res.items().size() >= 1);
+        assertTrue(!res.items().isEmpty());
     }
 }

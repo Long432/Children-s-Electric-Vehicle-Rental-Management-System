@@ -57,7 +57,7 @@ class VehicleIntegrationTest extends AbstractIntegrationTest {
     void updateVehicleStatus_shouldChange() throws Exception {
         UpdateVehicleStatusRequest req = new UpdateVehicleStatusRequest("Repairing");
 
-        Vehicle res = vehicleService.updateVehicleStatus(vehicle.getId(), req, seller);
+        Vehicle res = vehicleService.updateVehicleStatus(vehicle1.getId(), req, seller);
 
         assertNotNull(res);
         assertEquals(VehicleStatus.Repairing, res.getStatus());

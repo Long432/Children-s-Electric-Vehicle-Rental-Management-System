@@ -1,8 +1,10 @@
 package org.group6.childrenelectricvehiclerentalmanagement.Models;
 
 import jakarta.persistence.*;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnDefault;
 
 @Getter
 @Setter

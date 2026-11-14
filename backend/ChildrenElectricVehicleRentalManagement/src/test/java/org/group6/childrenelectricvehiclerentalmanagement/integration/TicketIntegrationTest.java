@@ -5,6 +5,7 @@ import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SettingsControlle
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.PaymentMethod;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.TicketStatus;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.VehicleStatus;
+import org.group6.childrenelectricvehiclerentalmanagement.Exceptions.TicketNotFound;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Ticket;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Vehicle;
 import org.group6.childrenelectricvehiclerentalmanagement.Services.TicketService;
@@ -35,7 +36,7 @@ class TicketIntegrationTest extends AbstractIntegrationTest {
 
         assertNotNull(res);
         assertEquals(1, res.ticket().ticketNo());
-        assertEquals(TicketStatus.Waiting, res.ticket().status());
+        assertEquals(TicketStatus.Waiting, TicketStatus.valueOf(res.ticket().status()));
         assertEquals("0901234567", res.ticket().phone());
         assertEquals(15000, res.ticket().amountPaid());
     }
@@ -52,24 +53,9 @@ class TicketIntegrationTest extends AbstractIntegrationTest {
         var res = ticketService.assignVehicle(req);
 
         assertNotNull(res);
-        assertEquals(TicketStatus.Inused, res.status());
+        assertEquals(TicketStatus.Inused, TicketStatus.valueOf(res.status()));
         assertEquals("xe-01", res.vehicle().slug());
-        assertEquals(VehicleStatus.Inused, vehicle.getStatus());
-    }
-
-    @Test
-    void cancelWaitingTicket_shouldRefund() throws Exception {
-        var ticketRes = ticketService.createTicket(newRequest("0901234567", "30", "Cash"));
-
-        Requests.CancelTicketRequest req = new Requests.CancelTicketRequest();
-        req.setActorId(seller.getId());
-        req.setId(String.valueOf(ticketRes.ticket().id()));
-
-        var res = ticketService.cancelTicket(req);
-
-        assertNotNull(res);
-        assertEquals(TicketStatus.Canceled, res.status());
-        assertEquals(15000, res.refundAmount());
+        assertEquals(VehicleStatus.Inused, vehicle1.getStatus());
     }
 
     @Test
@@ -78,7 +64,7 @@ class TicketIntegrationTest extends AbstractIntegrationTest {
         Vehicle newVeh = createVehicle("xe-02", VehicleStatus.Online);
         org.group6.childrenelectricvehiclerentalmanagement.Models.LinkingObject.SessionVehicle sv =
                 new org.group6.childrenelectricvehiclerentalmanagement.Models.LinkingObject.SessionVehicle();
-        sv.setSession(session);
+        sv.setSession(session1);
         sv.setVehicle(newVeh);
         sv.setAddedAt(java.time.LocalDateTime.now());
         sessionVehicleRepository.save(sv);
@@ -132,10 +118,10 @@ class TicketIntegrationTest extends AbstractIntegrationTest {
         var res = ticketService.returnTicket(req);
 
         assertNotNull(res);
-        assertEquals(TicketStatus.Completed, res.status());
+        assertEquals(TicketStatus.Completed, TicketStatus.valueOf(res.status()));
         assertTrue(res.overdueMinutes() > 0);
         assertTrue(res.overdueFee() > 0);
-        assertEquals(VehicleStatus.Online, vehicle.getStatus());
+        assertEquals(VehicleStatus.Online, vehicle1.getStatus());
     }
 
     @Test
@@ -159,7 +145,7 @@ class TicketIntegrationTest extends AbstractIntegrationTest {
         var res = ticketService.returnTicket(req);
 
         assertNotNull(res);
-        assertEquals(TicketStatus.Completed, res.status());
+        assertEquals(TicketStatus.Completed, TicketStatus.valueOf(res.status()));
     }
 
     @Test

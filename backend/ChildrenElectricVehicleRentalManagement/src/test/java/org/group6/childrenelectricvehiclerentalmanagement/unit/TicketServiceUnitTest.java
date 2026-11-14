@@ -112,7 +112,7 @@ class TicketServiceUnitTest {
 
         assertNotNull(res);
         assertEquals(1, res.ticket().ticketNo());
-        assertEquals(TicketStatus.Waiting, res.ticket().status());
+        assertEquals(TicketStatus.Waiting.name(), res.ticket().status());
         verify(ticketRepository).save(any(Ticket.class));
         verify(paymentRepository).save(any());
     }
@@ -184,7 +184,6 @@ class TicketServiceUnitTest {
         ticket.setRefundEnabled(false);
 
         when(ticketRepository.lockById(1L)).thenReturn(Optional.of(ticket));
-        when(ticket.getSession()).thenReturn(session);
         when(vehicleRepository.lockBySlug("xe-01")).thenReturn(Optional.of(vehicle));
         when(sessionVehicleRepository.existsBySessionIdAndVehicleIdAndRemovedAtIsNull(100L, 1L)).thenReturn(true);
         when(vehicleRepository.save(any(Vehicle.class))).thenReturn(vehicle);
@@ -194,7 +193,7 @@ class TicketServiceUnitTest {
         var res = ticketService.assignVehicle(req);
 
         assertNotNull(res);
-        assertEquals(TicketStatus.Inused, res.status());
+        assertEquals(TicketStatus.Inused.name(), res.status());
         assertEquals(VehicleStatus.Inused, vehicle.getStatus());
     }
 
@@ -211,7 +210,6 @@ class TicketServiceUnitTest {
         ticket.setStatus(TicketStatus.Inused);
 
         when(ticketRepository.lockById(1L)).thenReturn(Optional.of(ticket));
-        when(ticket.getSession()).thenReturn(session);
 
         assertThrows(TicketNotAssignable.class, () -> ticketService.assignVehicle(req));
     }
@@ -230,8 +228,6 @@ class TicketServiceUnitTest {
         ticket.setStatus(TicketStatus.Waiting);
 
         when(ticketRepository.lockById(1L)).thenReturn(Optional.of(ticket));
-        when(ticket.getSession()).thenReturn(ticket.getSession());
-
         assertThrows(SessionNotActive.class, () -> ticketService.assignVehicle(req));
     }
 
@@ -252,7 +248,6 @@ class TicketServiceUnitTest {
         notOnline.setStatus(VehicleStatus.Repairing);
 
         when(ticketRepository.lockById(1L)).thenReturn(Optional.of(ticket));
-        when(ticket.getSession()).thenReturn(session);
         when(vehicleRepository.lockBySlug("xe-01")).thenReturn(Optional.of(notOnline));
 
         assertThrows(VehicleNotAvailable.class, () -> ticketService.assignVehicle(req));
@@ -274,9 +269,10 @@ class TicketServiceUnitTest {
         ticket.setAmountPaid(15000);
         ticket.setTotalMinutes(30);
         ticket.setPaymentMethod(PaymentMethod.Cash);
+        ticket.setQueuedAt(LocalDateTime.now().minusMinutes(10));
+        ticket.setCancelWaitMinutes(0);
 
         when(ticketRepository.lockById(1L)).thenReturn(Optional.of(ticket));
-        when(ticket.getSession()).thenReturn(session);
         when(userRepository.getReferenceById(1L)).thenReturn(actor);
         when(ticketRepository.save(any(Ticket.class))).thenReturn(ticket);
         when(paymentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -284,7 +280,7 @@ class TicketServiceUnitTest {
         var res = ticketService.cancelTicket(req);
 
         assertNotNull(res);
-        assertEquals(TicketStatus.Canceled, res.status());
+        assertEquals(TicketStatus.Canceled.name(), res.status());
         assertEquals(15000, res.refundAmount());
     }
 
@@ -300,7 +296,7 @@ class TicketServiceUnitTest {
         ticket.setStatus(TicketStatus.Inused);
 
         when(ticketRepository.lockById(1L)).thenReturn(Optional.of(ticket));
-        when(ticket.getSession()).thenReturn(session);
+
 
         assertThrows(TicketNotCancelable.class, () -> ticketService.cancelTicket(req));
     }
@@ -326,7 +322,7 @@ class TicketServiceUnitTest {
         newVehicle.setStatus(VehicleStatus.Online);
 
         when(ticketRepository.lockById(1L)).thenReturn(Optional.of(ticket));
-        when(ticket.getSession()).thenReturn(session);
+
         when(vehicleRepository.lockBySlug("xe-02")).thenReturn(Optional.of(newVehicle));
         when(sessionVehicleRepository.existsBySessionIdAndVehicleIdAndRemovedAtIsNull(100L, 2L)).thenReturn(true);
         when(vehicleRepository.save(any(Vehicle.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -354,7 +350,7 @@ class TicketServiceUnitTest {
         ticket.setVehicle(vehicle);
 
         when(ticketRepository.lockById(1L)).thenReturn(Optional.of(ticket));
-        when(ticket.getSession()).thenReturn(session);
+
 
         assertThrows(SameVehicle.class, () -> ticketService.changeVehicle(req));
     }
@@ -382,7 +378,6 @@ class TicketServiceUnitTest {
 
         when(settingsService.loadSettings()).thenReturn(settings);
         when(ticketRepository.lockById(1L)).thenReturn(Optional.of(ticket));
-        when(ticket.getSession()).thenReturn(session);
         when(userRepository.getReferenceById(1L)).thenReturn(actor);
         when(ticketRepository.save(any(Ticket.class))).thenReturn(ticket);
         when(paymentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -435,7 +430,7 @@ class TicketServiceUnitTest {
         ticket.setDueAt(LocalDateTime.now().minusMinutes(10)); // còn 10 phút
 
         when(ticketRepository.lockById(1L)).thenReturn(Optional.of(ticket));
-        when(ticket.getSession()).thenReturn(session);
+
         when(userRepository.getReferenceById(1L)).thenReturn(actor);
         when(ticketRepository.save(any(Ticket.class))).thenReturn(ticket);
         when(paymentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -447,7 +442,7 @@ class TicketServiceUnitTest {
         var res = ticketService.returnTicket(req);
 
         assertNotNull(res);
-        assertEquals(TicketStatus.Completed, res.status());
+        assertEquals(TicketStatus.Completed.name(), res.status());
         assertEquals(VehicleStatus.Online, vehicle.getStatus());
     }
 
@@ -467,7 +462,7 @@ class TicketServiceUnitTest {
         ticket.setDueAt(LocalDateTime.now().minusMinutes(12)); // quá 12 phút
 
         when(ticketRepository.lockById(1L)).thenReturn(Optional.of(ticket));
-        when(ticket.getSession()).thenReturn(session);
+
         when(userRepository.getReferenceById(1L)).thenReturn(actor);
         when(ticketRepository.save(any(Ticket.class))).thenReturn(ticket);
         when(paymentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -479,7 +474,7 @@ class TicketServiceUnitTest {
         var res = ticketService.returnTicket(req);
 
         assertNotNull(res);
-        assertEquals(TicketStatus.Completed, res.status());
+        assertEquals(TicketStatus.Completed.name(), res.status());
         assertTrue(res.overdueMinutes() > 0);
         assertTrue(res.overdueFee() > 0);
     }
@@ -496,7 +491,7 @@ class TicketServiceUnitTest {
         ticket.setStatus(TicketStatus.Waiting); // không phải Inused/Overdue
 
         when(ticketRepository.lockById(1L)).thenReturn(Optional.of(ticket));
-        when(ticket.getSession()).thenReturn(session);
+
 
         assertThrows(TicketNotActive.class, () -> ticketService.returnTicket(req));
     }

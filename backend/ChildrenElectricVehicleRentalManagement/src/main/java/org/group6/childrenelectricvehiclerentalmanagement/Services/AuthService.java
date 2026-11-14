@@ -91,11 +91,11 @@ public class AuthService {
     }
 
     @Transactional(readOnly = true)
-    public MeResponse getMe(User actor) throws Exception {
+    public LoginResponse getMe(User actor) throws Exception {
         if (actor.getStatus()==UserStatus.Offline) throw new UserLoggedOut();
         if (actor.getStatus()==UserStatus.Deactivate) throw new UserDeactivated();
 
-        return new MeResponse(actor);
+        return new LoginResponse(actor);
     }
 
     @Transactional

@@ -45,6 +45,6 @@ public class AuthController extends BaseController {
 
     @PostMapping("/signup")
     public ResponseEntity<?> signup(@RequestBody SignUpRequest request) throws Exception {
-        return ResponseEntity.ok(new MeResponse(authService.signUp(request)));
+        return ResponseEntity.ok(new LoginResponse(authService.signUp(request)));
     }
 }

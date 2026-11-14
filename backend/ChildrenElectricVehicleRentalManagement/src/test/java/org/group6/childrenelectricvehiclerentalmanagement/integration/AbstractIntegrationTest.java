@@ -1,5 +1,6 @@
 package org.group6.childrenelectricvehiclerentalmanagement.integration;
 
+import org.group6.childrenelectricvehiclerentalmanagement.DTOs.SessionController.StartSessionRequest;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.PaymentMethod;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.SessionStatus;
 import org.group6.childrenelectricvehiclerentalmanagement.Enum.TicketStatus;
@@ -12,6 +13,7 @@ import org.group6.childrenelectricvehiclerentalmanagement.Models.User;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.Vehicle;
 import org.group6.childrenelectricvehiclerentalmanagement.Models.LinkingObject.SessionVehicle;
 import org.group6.childrenelectricvehiclerentalmanagement.Repositories.*;
+import org.group6.childrenelectricvehiclerentalmanagement.Services.SessionService;
 import org.group6.childrenelectricvehiclerentalmanagement.Services.SettingsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,8 +45,11 @@ public abstract class AbstractIntegrationTest {
     @Autowired protected SettingsService settingsService;
 
     protected User seller;
-    protected Session session;
-    protected Vehicle vehicle;
+    protected Session session1;
+    protected Session session2;
+    protected Vehicle vehicle1;
+    protected Vehicle vehicle2;
+    protected Vehicle vehicle3;
 
     @BeforeEach
     void setUp() {
@@ -53,22 +58,29 @@ public abstract class AbstractIntegrationTest {
         seller.setPasswordHash("hash");
         userRepository.save(seller);
 
-        session = new Session(
-                LocalDateTime.of(2026, 11, 10, 8, 0),
-                LocalDateTime.of(2026, 11, 10, 17, 0),
-                true,
+        session1 = new Session(LocalDateTime.now().plusMinutes(5),seller);
+
+        session2 = new Session(
+                LocalDateTime.now().plusHours(1),
+                LocalDateTime.now().plusHours(2),
                 seller
         );
-        session.setNextTicketNo(1);
-        sessionRepository.save(session);
 
-        vehicle = new Vehicle("xe-01");
-        vehicle.setStatus(VehicleStatus.Online);
-        vehicleRepository.save(vehicle);
+        sessionRepository.save(session1);
+        sessionRepository.save(session2);
+
+        vehicle1 = new Vehicle("xe-01");
+        vehicle2 = new Vehicle("xe-02");
+        vehicle3 = new Vehicle("xe-03");
+
+        vehicle1.setStatus(VehicleStatus.Online);
+        vehicleRepository.saveAndFlush(vehicle1);
+        vehicleRepository.saveAndFlush(vehicle2);
+        vehicleRepository.saveAndFlush(vehicle3);
 
         SessionVehicle sv = new SessionVehicle();
-        sv.setSession(session);
-        sv.setVehicle(vehicle);
+        sv.setSession(session1);
+        sv.setVehicle(vehicle1);
         sv.setAddedAt(LocalDateTime.now());
         sv.setRemovedAt(null);
         sessionVehicleRepository.save(sv);
@@ -81,6 +93,7 @@ public abstract class AbstractIntegrationTest {
         settings.setOverdueFeePerMinute(2000);
         settings.setOverdueGraceMinutes(5);
         settings.setMinimumMinutes(10);
+        settings.setCancelWaitMinutes(3);
         settings.setCreatedAt(LocalDateTime.now());
         settings.setUpdatedAt(LocalDateTime.now());
         settingsRepository.save(settings);
@@ -99,12 +112,11 @@ public abstract class AbstractIntegrationTest {
     protected Session createWaitingSession() {
         LocalDateTime now = LocalDateTime.now();
         Session s = new Session(
-                now,
-                now.plusHours(9),
-                false,
+                LocalDateTime.now().plusMinutes(5),
+                now.plusHours(1),
                 seller
         );
-        s.setNextTicketNo(1);
+
         return sessionRepository.save(s);
     }
 
@@ -129,6 +141,7 @@ public abstract class AbstractIntegrationTest {
         t.setOverdueFeePerMinute(2000);
         t.setOverdueGraceMinutes(5);
         t.setRefundEnabled(false);
+        t.setCancelWaitMinutes(3);
         t.setQueuedAt(LocalDateTime.now());
         t.setCreatedBy(seller);
         ticketRepository.save(t);
@@ -143,7 +156,7 @@ public abstract class AbstractIntegrationTest {
         t.setTicketNo(sess.getNextTicketNo());
         t.setPhone(phone);
         t.setStatus(TicketStatus.Inused);
-        t.setVehicle(vehicle);
+        t.setVehicle(vehicle1);
         t.setPaymentMethod(method);
         t.setTotalMinutes(minutes);
         t.setAmountPaid(15000);

@@ -56,41 +56,22 @@ public class SessionService {
 
     /**
      * POST /sessions. Phiên thường: cần đủ start_date, start_time, end_date, end_time.
-     * Phiên instant: bắt đầu ngay, end_* không bắt buộc (mặc định 00:00 hôm sau).
+     * Sau update: hàm này không còn chịu trachs nhiệm tạo session instant mà chỉ để tạo phiên cố định
+     * tính năng tạo phiên ngay lập tức được chuyển qua method startSession
      */
     @Transactional(rollbackFor = Exception.class)
     public SessionDetailResponse createSession(CreateSessionRequest request, User actor) throws Exception {
         requireActor(actor);
         if (request == null) throw new ValidationException("body", "Thiếu dữ liệu tạo phiên");
-
-        boolean instant = Boolean.TRUE.equals(request.is_instant());
         LocalDateTime now = now();
+        LocalDateTime start = LocalDateTime.of(request.start_date(),request.start_time());
+        LocalDateTime end = LocalDateTime.of(request.end_date(),request.end_time());
 
-        LocalDateTime start;
-        LocalDateTime end;
+        if (!start.isBefore(end)) throw new ValidationException("planned_end_at", "Thời điểm kết thúc phải muộn hơn thời điểm bắt đầu");
+        assertNoCollision(start,end,null);
 
-        if (instant) {
-            start = now;
-            if (request.end_date() == null && request.end_time() == null) {
-                end = defaultEnd(now);
-            } else {
-                end = LocalDateTime.of(
-                        required(request.end_date(), "end_date"),
-                        required(request.end_time(), "end_time"));
-            }
-        } else {
-            start = LocalDateTime.of(
-                    required(request.start_date(), "start_date"),
-                    required(request.start_time(), "start_time"));
-            end = LocalDateTime.of(
-                    required(request.end_date(), "end_date"),
-                    required(request.end_time(), "end_time"));
+        Session session = sessionRepository.save(new Session(start,end,actor));
 
-            if (start.isBefore(now.truncatedTo(ChronoUnit.MINUTES)))
-                throw new ValidationException("start_date", "Thời điểm bắt đầu phải từ hiện tại trở đi");
-        }
-
-        Session session = persistNewSession(start, end, instant, actor);
         audit(actor, "session.create", session, null, snapshot(session));
         return toDetail(session);
     }
@@ -107,49 +88,59 @@ public class SessionService {
     @Transactional(rollbackFor = Exception.class)
     public SessionDetailResponse startSession(StartSessionRequest request, User actor) throws Exception {
         requireActor(actor);
+
         if (request == null) throw new ValidationException("body", "Thiếu dữ liệu bắt đầu phiên");
 
         List<String> slugs = normalizeSlugs(request.vehicle_slugs());
         LocalDateTime now = now();
-        Session session;
+        Session newSession;
+
+        if (sessionRepository.existsByStatus(SessionStatus.InProgress)) throw new SessionAlreadyInProgress();
 
         if (request.session_id() == null) {
-            LocalDateTime end = request.planned_end_at() != null ? request.planned_end_at() : defaultEnd(now);
-            session = persistNewSession(now, end, true, actor);
-            audit(actor, "session.create", session, null, snapshot(session));
-        } else {
-            session = sessionRepository.findById(request.session_id()).orElseThrow(SessionNotFound::new);
+            LocalDateTime end;
 
-            switch (session.getStatus()) {
-                case Ended -> throw new AbstractException("session already ended", "SESSION_ENDED",
-                        "Phiên này đã hoàn thành từ trước", 409);
-                case Canceled -> throw new AbstractException("can not start a canceled session", "SESSION_CANCELED",
-                        "Phiên này đã bị hủy", 409);
-                case InProgress -> throw new AbstractException("session already in progress", "SESSION_INPROGRESS",
-                        "Phiên này đang được thực hiện", 409);
+            if (request.planned_end_at()==null){
+                Session nextSession = sessionRepository.findByScheduledDateIsAndScheduledTimeIsAfter(now.toLocalDate(),now.toLocalTime()).orElse(null);
+                if (nextSession==null){
+                    end = defaultEnd(now);
+                }else{
+                    end = LocalDateTime.of(nextSession.getScheduledDate(),nextSession.getScheduledTime().minusMinutes(5));
+                }
+            }else{
+                end = request.planned_end_at();
+            }
+
+            newSession = sessionRepository.save(new Session(end,actor));
+            audit(actor, "session.create", newSession, null, snapshot(newSession));
+        } else {
+            newSession = sessionRepository.findById(request.session_id()).orElseThrow(SessionNotFound::new);
+
+            switch (newSession.getStatus()) {
+                case Ended -> throw new AbstractException("session already ended", "SESSION_ENDED", "Phiên này đã hoàn thành từ trước", 409);
+                case Canceled -> throw new AbstractException("can not start a canceled session", "SESSION_CANCELED", "Phiên này đã bị hủy", 409);
+                case InProgress -> throw new AbstractException("session already in progress", "SESSION_INPROGRESS", "Phiên này đang được thực hiện", 409);
                 default -> { }
             }
 
-            LocalDateTime scheduled = LocalDateTime.of(session.getScheduledDate(), session.getScheduledTime());
-            if (now.isBefore(scheduled))
-                throw new AbstractException("session started earlier than its scheduled time",
-                        "START_SESSION_EARLY", "Chưa tới giờ bắt đầu", 409);
+            LocalDateTime scheduled = LocalDateTime.of(newSession.getScheduledDate(), newSession.getScheduledTime());
+            if (now.isBefore(scheduled)) throw new AbstractException("session started earlier than its scheduled time", "START_SESSION_EARLY", "Chưa tới giờ bắt đầu", 409);
 
             if (sessionRepository.existsByStatus(SessionStatus.InProgress)) throw new SessionAlreadyInProgress();
 
-            Map<String, Object> before = snapshot(session);
-            session.setStatus(SessionStatus.InProgress);
-            session.setStartedAt(now);
+            Map<String, Object> before = snapshot(newSession);
+            newSession.setStatus(SessionStatus.InProgress);
+            newSession.setStartedAt(now);
             try {
-                session = sessionRepository.saveAndFlush(session);
+                newSession = sessionRepository.saveAndFlush(newSession);
             } catch (DataIntegrityViolationException e) { // unique index: chỉ một phiên InProgress
                 throw new SessionAlreadyInProgress();
             }
-            audit(actor, "session.start", session, before, snapshot(session));
+            audit(actor, "session.start", newSession, before, snapshot(newSession));
         }
 
-        attachVehicles(session, slugs);
-        return toDetail(session);
+        attachVehicles(newSession, slugs);
+        return toDetail(newSession);
     }
 
     // ======================================================================
@@ -220,9 +211,7 @@ public class SessionService {
         }
 
         Pageable pageable = PageRequest.of(page - 1, limit, Sort.by(Sort.Direction.DESC, "id"));
-        Page<Session> result = status == null
-                ? sessionRepository.findAll(pageable)
-                : sessionRepository.findByStatus(status, pageable);
+        Page<Session> result = status == null ? sessionRepository.findAll(pageable) : sessionRepository.findByStatus(status, pageable);
 
         List<SessionBasicResponse> items = new ArrayList<>();
         for (Session s : result.getContent()) items.add(new SessionBasicResponse(s));
@@ -463,28 +452,27 @@ public class SessionService {
 
     /** Khóa ghi phiên đang làm, cùng cách với TicketService.createTicket để hai thao tác không chen nhau. */
     private Session currentSessionLocked() throws NoActiveSession {
-        return sessionRepository.lockByStatus(SessionStatus.InProgress).stream().findFirst()
-                .orElseThrow(NoActiveSession::new);
+        return sessionRepository.lockByStatus(SessionStatus.InProgress).stream().findFirst().orElseThrow(NoActiveSession::new);
     }
 
-    private Session persistNewSession(LocalDateTime start, LocalDateTime end, boolean instant, User actor) throws Exception {
-        if (!start.isBefore(end))
-            throw new ValidationException("planned_end_at", "Thời điểm kết thúc phải muộn hơn thời điểm bắt đầu");
-        if (instant && sessionRepository.existsByStatus(SessionStatus.InProgress))
-            throw new SessionAlreadyInProgress();
-
-        assertNoCollision(start, end, null);
-
-        Session session = new Session(start, end, instant, actor);
-        if (instant) session.setStartedAt(start);
-
-        try {
-            return sessionRepository.saveAndFlush(session);
-        } catch (DataIntegrityViolationException e) {
-            if (instant) throw new SessionAlreadyInProgress(); // unique index: chỉ một phiên InProgress
-            throw e;
-        }
-    }
+//    private Session persistNewSession(LocalDateTime start, LocalDateTime end, User actor) throws Exception {
+//        if (!start.isBefore(end))
+//            throw new ValidationException("planned_end_at", "Thời điểm kết thúc phải muộn hơn thời điểm bắt đầu");
+//        if (instant && sessionRepository.existsByStatus(SessionStatus.InProgress))
+//            throw new SessionAlreadyInProgress();
+//
+//        assertNoCollision(start, end, null);
+//
+//        Session session = new Session(start, end, instant, actor);
+//        if (instant) session.setStartedAt(start);
+//
+//        try {
+//            return sessionRepository.saveAndFlush(session);
+//        } catch (DataIntegrityViolationException e) {
+//            if (instant) throw new SessionAlreadyInProgress(); // unique index: chỉ một phiên InProgress
+//            throw e;
+//        }
+//    }
 
     /** Hai khoảng [start,end) trùng nhau khi curr.start < end và curr.end > start. Phiên nối tiếp nhau không tính là trùng. */
     private void assertNoCollision(LocalDateTime start, LocalDateTime end, Long excludeId) throws CollideWithOtherSession {
@@ -510,17 +498,15 @@ public class SessionService {
     private void attachVehicles(Session session, List<String> slugs) throws Exception {
         LocalDateTime now = now();
         for (String slug : slugs) {
-            Vehicle vehicle = vehicleRepository.lockBySlug(slug)
-                    .orElseThrow(() -> new AbstractException("vehicle not found: " + slug,
-                            "VEHICLE_NOT_EXITS", "Không tìm thấy xe " + slug, 404));
+            Vehicle vehicle = vehicleRepository.lockBySlug(slug).orElseThrow(() -> new AbstractException("vehicle not found: " + slug, "VEHICLE_NOT_EXITS", "Không tìm thấy xe " + slug, 404));
 
             if (vehicle.getStatus() != VehicleStatus.Online && vehicle.getStatus() != VehicleStatus.Offline)
                 throw new AbstractException("vehicle not available: " + slug + " is " + vehicle.getStatus(),
                         "VEHICLE_NOT_AVAILABLE",
                         "Xe " + slug + " hiện không sẵn sàng (đang sửa chữa hoặc đang sử dụng)", 409);
 
-            Optional<SessionVehicle> existing =
-                    sessionVehicleRepository.findBySessionIdAndVehicleId(session.getId(), vehicle.getId());
+            Optional<SessionVehicle> existing = sessionVehicleRepository.findBySessionIdAndVehicleId(session.getId(), vehicle.getId());
+
             if (existing.isPresent() && existing.get().getRemovedAt() == null)
                 throw new AbstractException("vehicle already in session: " + slug,
                         "VEHICLE_ALREADY_IN_SESSION", "Xe " + slug + " đã có trong phiên", 409);

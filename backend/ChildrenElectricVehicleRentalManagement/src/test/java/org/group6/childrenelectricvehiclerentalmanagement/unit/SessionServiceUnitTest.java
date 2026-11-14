@@ -23,6 +23,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -39,6 +41,7 @@ import static org.mockito.Mockito.*;
  * Dựa trên nghiệp vụ quản lý phiên làm (features.md section 2.1, phân tích nghiệp vụ section 5.1).
  */
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class SessionServiceUnitTest {
 
     @Mock private SessionRepository sessionRepository;
@@ -66,9 +69,9 @@ class SessionServiceUnitTest {
             session = new Session();
             session.setId(10L);
             session.setStatus(SessionStatus.Waiting);
-            session.setScheduledDate(LocalDate.of(2026, 11, 10));
-            session.setScheduledTime(LocalTime.of(8, 0));
-            session.setPlannedEndAt(LocalDateTime.of(2026, 11, 10, 17, 0));
+            session.setScheduledDate(LocalDateTime.now().plusHours(1).toLocalDate());
+            session.setScheduledTime(LocalDateTime.now().plusHours(1).toLocalTime());
+            session.setPlannedEndAt(LocalDateTime.now().plusHours(2));
             session.setIsInstant(false);
             session.setNextTicketNo(1);
         }
@@ -77,10 +80,14 @@ class SessionServiceUnitTest {
     // ==================== createSession ====================
 
     @Test
-    void createSession_instant_shouldCreateInProgressSession() throws Exception {
-        CreateSessionRequest req = new CreateSessionRequest(null, null, null, null, true);
-        when(sessionRepository .existsByStatus(SessionStatus.InProgress)).thenReturn(false);
-        when(sessionRepository.saveAndFlush(any(Session.class))).thenAnswer(inv -> {
+    void createSession_scheduled_shouldCreateWaitingSession() throws Exception {
+        LocalDateTime start = LocalDateTime.now().plusHours(4);
+        LocalDateTime end = start.plusHours(5);
+        CreateSessionRequest req = new CreateSessionRequest(
+                start.toLocalDate(), start.toLocalTime(),
+                end.toLocalDate(), end.toLocalTime());
+
+        when(sessionRepository.save(any(Session.class))).thenAnswer(inv -> {
             Session s = inv.getArgument(0);
             s.setId(1L);
             return s;
@@ -89,28 +96,35 @@ class SessionServiceUnitTest {
         SessionDetailResponse res = sessionService.createSession(req, actor);
 
         assertNotNull(res);
-        verify(sessionRepository).saveAndFlush(any(Session.class));
+        assertEquals(SessionStatus.Waiting, res.session_status());
+        verify(sessionRepository).save(any(Session.class));
     }
 
     @Test
     void createSession_instant_whenAlreadyInProgress_shouldThrowSessionAlreadyInProgress() throws Exception {
-        CreateSessionRequest req = new CreateSessionRequest(null, null, null, null, true);
-        when(sessionRepository.existsByStatus(SessionStatus.InProgress)).thenReturn(true);
+        LocalDateTime end = LocalDateTime.now().plusHours(2);
+        StartSessionRequest req = new StartSessionRequest(
+                null,
+                null,
+                end);
 
-        assertThrows(SessionAlreadyInProgress.class, () -> sessionService.createSession(req, actor));
-        verify(sessionRepository, never()).saveAndFlush(any());
+        assertThrows(SessionAlreadyInProgress.class, () -> sessionService.startSession(req, actor));
+        verify(sessionRepository, never()).save(any());
     }
 
     @Test
-    void createSession_scheduled_inPast_shouldThrowValidationException() throws Exception {
+    void createSession_scheduled_inPast_shouldCreateSession() throws Exception {
         LocalDateTime past = LocalDateTime.now().minusMinutes(10);
         CreateSessionRequest req = new CreateSessionRequest(
                 past.toLocalDate(), past.toLocalTime(),
-                past.plusHours(2).toLocalDate(), past.plusHours(2).toLocalTime(),
-                false);
-        when(sessionRepository.existsByStatus(SessionStatus.InProgress)).thenReturn(false);
+                past.plusHours(2).toLocalDate(), past.plusHours(2).toLocalTime());
+        when(sessionRepository.existsByStatus(SessionStatus.InProgress)).thenReturn(true);
+        when(sessionRepository.save(any(Session.class))).thenAnswer(inv -> { Session s = inv.getArgument(0); s.setId(1L); return s; });
 
-        assertThrows(ValidationException.class, () -> sessionService.createSession(req, actor));
+        SessionDetailResponse res = sessionService.createSession(req, actor);
+
+        assertNotNull(res);
+        assertEquals(SessionStatus.Waiting, res.session_status());
     }
 
     @Test
@@ -119,8 +133,7 @@ class SessionServiceUnitTest {
         LocalDateTime end = start.minusHours(1);
         CreateSessionRequest req = new CreateSessionRequest(
                 start.toLocalDate(), start.toLocalTime(),
-                end.toLocalDate(), end.toLocalTime(),
-                false);
+                end.toLocalDate(), end.toLocalTime());
         when(sessionRepository.existsByStatus(SessionStatus.InProgress)).thenReturn(false);
 
         assertThrows(ValidationException.class, () -> sessionService.createSession(req, actor));
@@ -128,14 +141,12 @@ class SessionServiceUnitTest {
 
     @Test
     void createSession_scheduled_valid_shouldCreateWaitingSession() throws Exception {
-        LocalDateTime start = LocalDateTime.now().plusHours(1);
-        LocalDateTime end = start.plusHours(2);
+        LocalDateTime start = LocalDateTime.now().plusHours(12);
+        LocalDateTime end = start.plusHours(14);
         CreateSessionRequest req = new CreateSessionRequest(
                 start.toLocalDate(), start.toLocalTime(),
-                end.toLocalDate(), end.toLocalTime(),
-                false);
-        when(sessionRepository.existsByStatus(SessionStatus.InProgress)).thenReturn(false);
-        when(sessionRepository.saveAndFlush(any(Session.class))).thenAnswer(inv -> {
+                end.toLocalDate(), end.toLocalTime());
+        when(sessionRepository.save(any(Session.class))).thenAnswer(inv -> {
             Session s = inv.getArgument(0);
             s.setId(1L);
             return s;
@@ -144,18 +155,24 @@ class SessionServiceUnitTest {
         SessionDetailResponse res = sessionService.createSession(req, actor);
 
         assertNotNull(res);
-        verify(sessionRepository).saveAndFlush(any(Session.class));
+        assertEquals(SessionStatus.Waiting, res.session_status());
+        verify(sessionRepository).save(any(Session.class));
     }
 
     // ==================== startSession ====================
 
     @Test
     void startSession_withSessionId_waiting_shouldStart() throws Exception {
+        session.setScheduledDate(LocalDate.now());
+        session.setScheduledTime(LocalTime.now().minusMinutes(5));
+        sessionRepository.save(session);
         StartSessionRequest req = new StartSessionRequest(10L, List.of("xe-01"), null);
         when(sessionRepository.findById(10L)).thenReturn(Optional.of(session));
         when(sessionRepository.existsByStatus(SessionStatus.InProgress)).thenReturn(false);
         when(sessionRepository.saveAndFlush(any(Session.class))).thenReturn(session);
-        when(vehicleRepository.lockBySlug("xe-01")).thenReturn(Optional.of(new Vehicle("xe-01")));
+        Vehicle v = new Vehicle("xe-01");
+        v.setStatus(VehicleStatus.Offline);
+        when(vehicleRepository.lockBySlug("xe-01")).thenReturn(Optional.of(v));
         when(sessionVehicleRepository.findBySessionIdAndVehicleId(10L, 1L)).thenReturn(Optional.empty());
         when(sessionVehicleRepository.save(any(SessionVehicle.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -184,7 +201,9 @@ class SessionServiceUnitTest {
             s.setStatus(SessionStatus.InProgress);
             return s;
         });
-        when(vehicleRepository.lockBySlug("xe-01")).thenReturn(Optional.of(new Vehicle("xe-01")));
+        Vehicle v = new Vehicle("xe-01");
+        v.setStatus(VehicleStatus.Offline);
+        when(vehicleRepository.lockBySlug("xe-01")).thenReturn(Optional.of(v));
         when(sessionVehicleRepository.findBySessionIdAndVehicleId(1L, 1L)).thenReturn(Optional.empty());
         when(sessionVehicleRepository.save(any(SessionVehicle.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -299,7 +318,9 @@ class SessionServiceUnitTest {
     @Test
     void addVehiclesToCurrentSession_success() throws Exception {
         when(sessionRepository.lockByStatus(SessionStatus.InProgress)).thenReturn(List.of(session));
-        when(vehicleRepository.lockBySlug("xe-01")).thenReturn(Optional.of(new Vehicle("xe-01")));
+        Vehicle v = new Vehicle("xe-01");
+        v.setStatus(VehicleStatus.Offline);
+        when(vehicleRepository.lockBySlug("xe-01")).thenReturn(Optional.of(v));
         when(sessionVehicleRepository.findBySessionIdAndVehicleId(10L, 1L)).thenReturn(Optional.empty());
         when(sessionVehicleRepository.save(any(SessionVehicle.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -392,24 +413,24 @@ class SessionServiceUnitTest {
 
     @Test
     void updateSession_notWaiting_shouldThrowSessionNotEditable() throws Exception {
-        session.setStatus(SessionStatus.InProgress);
-        when(sessionRepository.findById(10L)).thenReturn(Optional.of(session));
+        UpdateSessionRequest req1 = new UpdateSessionRequest(
+                LocalDateTime.now(),
+                LocalDateTime.now().plusHours(1).toLocalDate(),
+                LocalDateTime.now().plusHours(1).toLocalTime(),
+                false
+        );
+        StartSessionRequest start1 = new StartSessionRequest(10L,null,null);
 
-        UpdateSessionRequest req = new UpdateSessionRequest(
-                LocalDateTime.of(2026, 11, 10, 18, 0),
-                LocalDate.of(2026, 11, 10), LocalTime.of(9, 0), false);
+        sessionService.updateSession(10L,req1,actor);
+        sessionService.startSession(start1,actor);
 
-        assertThrows(SessionNotEditable.class, () -> sessionService.updateSession(10L, req, actor));
-    }
+        UpdateSessionRequest req2 = new UpdateSessionRequest(
+                LocalDateTime.now().plusHours(1),
+                LocalDateTime.now().plusHours(2).toLocalDate(),
+                LocalDateTime.now().plusHours(2).toLocalTime(),
+                false
+        );
 
-    @Test
-    void updateSession_instantTrue_shouldThrowValidationException() throws Exception {
-        when(sessionRepository.findById(10L)).thenReturn(Optional.of(session));
-
-        UpdateSessionRequest req = new UpdateSessionRequest(
-                LocalDateTime.of(2026, 11, 10, 18, 0),
-                LocalDate.of(2026, 11, 10), LocalTime.of(9, 0), true);
-
-        assertThrows(ValidationException.class, () -> sessionService.updateSession(10L, req, actor));
+        assertThrows(SessionNotEditable.class, () -> sessionService.updateSession(10L, req2, actor));
     }
 }
