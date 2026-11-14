@@ -240,8 +240,6 @@ class VehicleServiceUnitTest {
 
         UpdateVehicleStatusRequest req = new UpdateVehicleStatusRequest("Inused"); // không được set qua API
 
-        when(vehicleRepository.findById(1L)).thenReturn(Optional.of(vehicle));
-
         assertThrows(ValidationException.class, () -> vehicleService.updateVehicleStatus(1L, req, actor));
     }
 

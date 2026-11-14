@@ -23,12 +23,12 @@ class VehicleIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void createNewVehicle_success() throws Exception {
-        createVehicleRequest req = new createVehicleRequest("xe-02");
+        createVehicleRequest req = new createVehicleRequest("xe-010");
 
         Vehicle res = vehicleService.createNewVehicle(req, seller);
 
         assertNotNull(res);
-        assertEquals("xe-02", res.getSlug());
+        assertEquals("xe-010", res.getSlug());
         assertEquals(VehicleStatus.Offline, res.getStatus());
     }
 

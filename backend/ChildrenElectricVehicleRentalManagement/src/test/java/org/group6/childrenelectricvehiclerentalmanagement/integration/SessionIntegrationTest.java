@@ -59,8 +59,8 @@ class SessionIntegrationTest extends AbstractIntegrationTest {
         session1.setStatus(SessionStatus.Ended);
         sessionRepository.save(session1);
 
-        LocalDateTime start = LocalDateTime.now().plusHours(1);
-        LocalDateTime end = start.plusHours(2);
+        LocalDateTime start = LocalDateTime.now().plusHours(10);
+        LocalDateTime end = start.plusHours(12);
         CreateSessionRequest req = new CreateSessionRequest(
                 start.toLocalDate(), start.toLocalTime(),
                 end.toLocalDate(), end.toLocalTime());
@@ -86,8 +86,9 @@ class SessionIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void startWaitingSession_shouldBecomeInProgress() throws Exception {
-        Session waiting = createWaitingSession();
-        StartSessionRequest req = new StartSessionRequest(waiting.getId(), List.of("xe-01"), null);
+        session1.setStatus(SessionStatus.Waiting);
+        sessionRepository.save(session1);
+        StartSessionRequest req = new StartSessionRequest(session1.getId(),null, null);
 
         SessionDetailResponse res = sessionService.startSession(req, seller);
 
@@ -167,10 +168,6 @@ class SessionIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void addVehicleToCurrentSession_success() throws Exception {
-        for(SessionVehicle sv:sessionVehicleRepository.findAll()){
-            log.info("{} {}",sv.getVehicle().getSlug(),sv.getVehicle().getId());
-        }
-
         // session1 từ setUp đã InProgress, thêm xe trực tiếp
         AddSessionVehiclesRequest req = new AddSessionVehiclesRequest(List.of("xe-03"));
 
