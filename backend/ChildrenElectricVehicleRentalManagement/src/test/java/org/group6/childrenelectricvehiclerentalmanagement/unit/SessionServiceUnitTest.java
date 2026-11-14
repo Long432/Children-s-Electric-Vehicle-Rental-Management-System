@@ -74,6 +74,8 @@ class SessionServiceUnitTest {
             session.setPlannedEndAt(LocalDateTime.now().plusHours(2));
             session.setIsInstant(false);
             session.setNextTicketNo(1);
+
+            sessionRepository.save(session);
         }
 
 
@@ -403,8 +405,8 @@ class SessionServiceUnitTest {
         when(sessionRepository.save(any(Session.class))).thenReturn(session);
 
         UpdateSessionRequest req = new UpdateSessionRequest(
-                LocalDateTime.of(2026, 11, 10, 18, 0),
-                LocalDate.of(2026, 11, 10), LocalTime.of(9, 0), false);
+                LocalDateTime.now().plusHours(7) ,
+                LocalDateTime.now().plusHours(6).toLocalDate(), LocalDateTime.now().plusHours(6).toLocalTime() , false);
 
         SessionDetailResponse res = sessionService.updateSession(10L, req, actor);
 
