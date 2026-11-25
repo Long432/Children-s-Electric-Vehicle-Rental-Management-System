@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1094515783343",
+    "project_id": "happychildrenev",
+    "storage_bucket": "happychildrenev.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1094515783343:android:ba643d12ae8dc09903065a",
+        "android_client_info": {
+          "package_name": "org.group6.evrental"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDfVhStj51ptNQmDXJVbM2GW5EbF_cApp4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
