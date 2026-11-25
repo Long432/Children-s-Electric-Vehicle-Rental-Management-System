@@ -111,7 +111,8 @@ public class SessionService {
                 end = request.planned_end_at();
             }
 
-            newSession = sessionRepository.save(new Session(end,actor));
+            newSession = new Session(end,actor);
+            newSession = sessionRepository.saveAndFlush(newSession);
             audit(actor, "session.create", newSession, null, snapshot(newSession));
         } else {
             newSession = sessionRepository.findById(request.session_id()).orElseThrow(SessionNotFound::new);
@@ -136,6 +137,11 @@ public class SessionService {
             } catch (DataIntegrityViolationException e) { // unique index: chỉ một phiên InProgress
                 throw new SessionAlreadyInProgress();
             }
+
+            for (Session ss:sessionRepository.findAll()){
+                log.info("{} {}", ss.getId(), ss.getStartedAt());
+            }
+
             audit(actor, "session.start", newSession, before, snapshot(newSession));
         }
 

@@ -75,7 +75,7 @@ class SessionServiceUnitTest {
             session.setIsInstant(false);
             session.setNextTicketNo(1);
 
-            sessionRepository.save(session);
+            sessionRepository.saveAndFlush(session);
         }
 
 
@@ -195,7 +195,7 @@ class SessionServiceUnitTest {
 
     @Test
     void startSession_withoutSessionId_shouldCreateInstant() throws Exception {
-        StartSessionRequest req = new StartSessionRequest(null, List.of("xe-01"), null);
+        StartSessionRequest req = new StartSessionRequest(null, List.of("xe-01"), LocalDateTime.now().plusHours(4));
         when(sessionRepository.existsByStatus(SessionStatus.InProgress)).thenReturn(false);
         when(sessionRepository.saveAndFlush(any(Session.class))).thenAnswer(inv -> {
             Session s = inv.getArgument(0);
@@ -205,6 +205,7 @@ class SessionServiceUnitTest {
         });
         Vehicle v = new Vehicle("xe-01");
         v.setStatus(VehicleStatus.Offline);
+
         when(vehicleRepository.lockBySlug("xe-01")).thenReturn(Optional.of(v));
         when(sessionVehicleRepository.findBySessionIdAndVehicleId(1L, 1L)).thenReturn(Optional.empty());
         when(sessionVehicleRepository.save(any(SessionVehicle.class))).thenAnswer(inv -> inv.getArgument(0));

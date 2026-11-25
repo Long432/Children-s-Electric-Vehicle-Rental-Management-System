@@ -61,6 +61,8 @@ class SettingsServiceUnitTest {
         settings.setMinimumMinutes(0);
         settings.setCreatedAt(LocalDateTime.now());
         settings.setUpdatedAt(LocalDateTime.now());
+
+        settings = settingsRepository.saveAndFlush(settings);
     }
 
     // ==================== getSettings ====================
